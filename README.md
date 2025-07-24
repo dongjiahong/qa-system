@@ -86,7 +86,7 @@ knowledge new --name "programming" \
 
 ```bash
 # 开始新的问答会话
-knowledge python-tutorial review new
+knowledge review python-tutorial new
 
 # 示例会话：
 # 🤖 正在生成问题...
@@ -103,11 +103,11 @@ knowledge python-tutorial review new
 
 ```bash
 # 查看历史问答记录
-knowledge python-tutorial review history
+knowledge review python-tutorial history
 
 # 详细查看和导出
-knowledge python-tutorial review history --detailed
-knowledge python-tutorial review history export --format csv
+knowledge review python-tutorial history --detailed
+knowledge review python-tutorial export --format csv
 ```
 
 ### 5. 管理知识库
@@ -133,10 +133,10 @@ knowledge new --name <知识库名称> --file <文件路径> [--file <文件路�
 ### 问答学习
 ```bash
 # 开始新问答
-knowledge <知识库名称> review new
+knowledge review <知识库名称> new
 
 # 查看历史记录
-knowledge <知识库名称> review history [--limit <数量>] [--page <页码>]
+knowledge review <知识库名称> history [--limit <数量>] [--page <页码>]
 ```
 
 ### 知识库管理
@@ -347,26 +347,20 @@ pytest tests/test_knowledge_base_manager.py
 - 集成测试：组件间交互测试
 - 用户体验测试：CLI界面和错误处理测试
 
-## 🚀 部署
+## 🚀 生产环境配置
 
-### Docker 部署（计划中）
-```bash
-# 构建镜像
-docker build -t knowledge-qa-system .
-
-# 运行容器
-docker run -p 8080:8080 knowledge-qa-system
-```
-
-### 生产环境配置
 ```bash
 # 设置生产环境配置
 knowledge config template apply production
 
 # 配置环境变量
 export KNOWLEDGE_DATA_DIR=/var/lib/knowledge_qa
-export OLLAMA_BASE_URL=http://ollama-server:11434
+export OLLAMA_BASE_URL=http://localhost:11434
 export LOG_LEVEL=INFO
+
+# 创建系统服务（可选）
+sudo systemctl enable ollama
+sudo systemctl start ollama
 ```
 
 ## 🤝 贡献指南

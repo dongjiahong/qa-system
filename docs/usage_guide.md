@@ -59,7 +59,7 @@ knowledge new --name "programming" \
 
 ```bash
 # 开始问答会话
-knowledge python-tutorial review new
+knowledge review python-tutorial new
 
 # 系统会生成问题，例如：
 # 问题: Python有哪些主要特点？
@@ -121,7 +121,7 @@ knowledge delete python-tutorial --force
 
 #### 开始新的问答会话
 ```bash
-knowledge <知识库名称> review new
+knowledge review <知识库名称> new
 
 # 示例会话：
 # 🤖 正在生成问题...
@@ -162,34 +162,34 @@ knowledge <知识库名称> review new
 #### 查看历史记录
 ```bash
 # 查看基本历史记录
-knowledge python-tutorial review history
+knowledge review python-tutorial history
 
 # 分页查看
-knowledge python-tutorial review history --limit 5 --page 1
+knowledge review python-tutorial history --limit 5 --page 1
 
 # 详细视图
-knowledge python-tutorial review history --detailed
+knowledge review python-tutorial history --detailed
 
 # 按时间排序
-knowledge python-tutorial review history --sort time
+knowledge review python-tutorial history --sort time
 
 # 按分数排序
-knowledge python-tutorial review history --sort score
+knowledge review python-tutorial history --sort score
 ```
 
 #### 查看特定记录详情
 ```bash
 # 查看记录详情
-knowledge python-tutorial review history detail --id 123
+knowledge review python-tutorial detail 123
 ```
 
 #### 导出历史记录
 ```bash
 # 导出为JSON格式
-knowledge python-tutorial review history export --format json
+knowledge review python-tutorial export --format json
 
 # 导出为CSV格式并保存到文件
-knowledge python-tutorial review history export --format csv --output history.csv
+knowledge review python-tutorial export --format csv --output history.csv
 ```
 
 ### 系统管理
@@ -254,10 +254,10 @@ knowledge new --name "python-learning" \
   --file "代码示例.txt"
 
 # 3. 开始学习
-knowledge python-learning review new
+knowledge review python-learning new
 
 # 4. 定期复习
-knowledge python-learning review history --sort score
+knowledge review python-learning history --sort score
 # 重点复习低分问题
 ```
 
@@ -274,11 +274,11 @@ knowledge new --name "final-exam" \
 # 2. 系统性复习
 for i in {1..10}; do
   echo "第${i}轮复习"
-  knowledge final-exam review new
+  knowledge review final-exam new
 done
 
 # 3. 查看学习进度
-knowledge final-exam review history --detailed
+knowledge review final-exam history --detailed
 ```
 
 ### 场景3：技术文档学习
@@ -291,10 +291,10 @@ knowledge new --name "api-docs" \
   --file "示例代码.txt"
 
 # 2. 针对性学习
-knowledge api-docs review new
+knowledge review api-docs new
 
 # 3. 导出学习记录供团队分享
-knowledge api-docs review history export --format csv --output team-learning.csv
+knowledge review api-docs export --format csv --output team-learning.csv
 ```
 
 ### 场景4：多语言学习
@@ -305,8 +305,8 @@ knowledge new --name "english-grammar" --file "grammar-guide.pdf"
 knowledge new --name "chinese-literature" --file "文学作品.txt"
 
 # 分别学习
-knowledge english-grammar review new
-knowledge chinese-literature review new
+knowledge review english-grammar new
+knowledge review chinese-literature new
 
 # 查看所有知识库
 knowledge list
@@ -378,7 +378,7 @@ done
 ```bash
 # 导出所有知识库的历史记录
 for kb in $(knowledge list --names-only); do
-  knowledge $kb review history export --format csv --output "${kb}-history.csv"
+  knowledge review $kb export --format csv --output "${kb}-history.csv"
 done
 ```
 
@@ -533,11 +533,11 @@ QUESTIONS_PER_DAY=5
 
 for i in $(seq 1 $QUESTIONS_PER_DAY); do
   echo "问题 $i/$QUESTIONS_PER_DAY"
-  timeout 300 knowledge $KB_NAME review new
+  timeout 300 knowledge review $KB_NAME new
 done
 
 # 生成学习报告
-knowledge $KB_NAME review history export --format json > daily-report.json
+knowledge review $KB_NAME export --format json > daily-report.json
 ```
 
 这个使用指南涵盖了系统的所有主要功能和使用场景。用户可以根据自己的需求选择相应的功能和策略。

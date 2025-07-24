@@ -854,10 +854,10 @@ class KnowledgeCLI:
     def _display_history_help(self, kb_name: str):
         """显示历史记录操作帮助"""
         console.print(f"\n[dim]💡 提示:[/dim]")
-        console.print(f"[dim]  • 查看详情: knowledge {kb_name} review history --detailed[/dim]")
-        console.print(f"[dim]  • 过滤记录: knowledge {kb_name} review history --correct/--incorrect[/dim]")
-        console.print(f"[dim]  • 搜索问题: knowledge {kb_name} review history --search '关键词'[/dim]")
-        console.print(f"[dim]  • 导出记录: knowledge {kb_name} review export[/dim]")
+        console.print(f"[dim]  • 查看详情: knowledge review {kb_name} history --detailed[/dim]")
+        console.print(f"[dim]  • 过滤记录: knowledge review {kb_name} history --correct/--incorrect[/dim]")
+        console.print(f"[dim]  • 搜索问题: knowledge review {kb_name} history --search '关键词'[/dim]")
+        console.print(f"[dim]  • 导出记录: knowledge review {kb_name} export[/dim]")
     
     def list_knowledge_bases(self):
         """列出所有知识库"""
@@ -1053,8 +1053,8 @@ def main(ctx, debug, verbose, config, no_color, help_command, examples, troubles
     \b
     快速开始:
       knowledge new -n my-kb -f document.pdf    # 创建知识库
-      knowledge my-kb review new                # 开始学习
-      knowledge my-kb review history            # 查看历史
+      knowledge review my-kb new                # 开始学习
+      knowledge review my-kb history            # 查看历史
     
     \b
     获取帮助:

@@ -186,10 +186,10 @@ def demonstrate_cli_commands():
         print("   knowledge list")
         
         print("\n3. 开始问答命令：")
-        print("   knowledge demo-kb review new")
+        print("   knowledge review demo-kb new")
         
         print("\n4. 查看历史命令：")
-        print("   knowledge demo-kb review history")
+        print("   knowledge review demo-kb history")
         
         print("\n5. 删除知识库命令：")
         print("   knowledge delete demo-kb")
