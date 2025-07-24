@@ -155,168 +155,30 @@ cython_debug/
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be added to the global gitignore or merged into this project gitignore.  For a PyCharm
-#  project, it is recommended to ignore the entire .idea directory.
-.idea/
-
-# VS Code
-.vscode/
-*.code-workspace
-
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-
-# Icon must end with two \r
-Icon
-
-# Thumbnails
-._*
-
-# Files that might appear in the root of a volume
-.DocumentRevisions-V100
-.fseventsd
-.Spotlight-V100
-.TemporaryItems
-.Trashes
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
-
-# Directories potentially created on remote AFP share
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
-
-# Windows
-# Windows thumbnail cache files
-Thumbs.db
-Thumbs.db:encryptable
-ehthumbs.db
-ehthumbs_vista.db
-
-# Dump file
-*.stackdump
-
-# Folder config file
-[Dd]esktop.ini
-
-# Recycle Bin used on file shares
-$RECYCLE.BIN/
-
-# Windows Installer files
-*.cab
-*.msi
-*.msix
-*.msm
-*.msp
-
-# Windows shortcuts
-*.lnk
-
-# Linux
-*~
-
-# temporary files which can be created if a process still has a handle open of a deleted file
-.fuse_hidden*
-
-# KDE directory preferences
-.directory
-
-# Linux trash folder which might appear on any partition or disk
-.Trash-*
-
-# .nfs files are created when an open file is removed but is still being accessed
-.nfs*
+#  project, it is recommended to use the following settings:
+#  https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
+#  Uncomment the following line if you want to ignore the entire idea folder.
+#.idea/
 
 # Project specific
-# ChromaDB data
-chroma_db/
-*.chroma
-
-# SQLite databases
+data/
+logs/
 *.db
 *.sqlite
 *.sqlite3
 
-# Knowledge base data
-knowledge_bases/
-data/
-storage/
-
-# Logs
-logs/
-*.log
-
-# Configuration files with sensitive data
-config.ini
-.env.local
-.env.production
+# ChromaDB
+chroma_db/
 
 # Temporary files
-tmp/
-temp/
 *.tmp
-
-# Model files (if stored locally)
-models/
-*.bin
-*.safetensors
-
-# Test data
-test_data/
-sample_files/
-
-# Documentation build
-docs/build/
-docs/_build/
-
-# Backup files
-*.bak
-*.backup
-*~
-
-# Editor temporary files
-.swp
-.swo
-*~
-
-# OS generated files
-.DS_Store?
-ehthumbs.db
-Icon?
+*.temp
+.DS_Store
 Thumbs.db
 
-# IDE files
-*.sublime-project
-*.sublime-workspace
+# IDE
+.vscode/
+.idea/
 
-# Jupyter Notebook checkpoints
-.ipynb_checkpoints/
-
-# pytest
-.pytest_cache/
-
-# Coverage reports
-htmlcov/
-.coverage
-coverage.xml
-
-# Virtual environments
-venv*/
-env*/
-.venv*/
-
-# Local development
-.local/
-local_config.py
-
-# Docker
-.dockerignore
-docker-compose.override.yml
-
-# Kiro specific (keep spec files but ignore other Kiro data)
-.kiro/cache/
-.kiro/logs/
-.kiro/temp/
+# Local configuration
+.env.local

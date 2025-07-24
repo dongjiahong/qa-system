@@ -1,20 +1,20 @@
 # Implementation Plan
 
-- [ ] 1. 设置项目结构和核心依赖
+- [x] 1. 设置项目结构和核心依赖
   - 创建项目目录结构，包含 src、tests、docs 等目录
   - 配置 pyproject.toml 文件，定义项目依赖和元数据
   - 创建虚拟环境配置和依赖管理文件
   - 设置基础的日志配置和环境变量管理
   - _Requirements: 5.4_
 
-- [ ] 2. 实现核心数据模型和异常类
+- [x] 2. 实现核心数据模型和异常类
   - 创建 models.py 文件，定义 KnowledgeBase、Question、EvaluationResult、QARecord 数据类
   - 实现自定义异常类层次结构（KnowledgeSystemError 及其子类）
   - 添加数据模型的验证方法和序列化支持
   - 编写数据模型的单元测试
   - _Requirements: 1.3, 5.3_
 
-- [ ] 3. 实现数据库层和持久化
+- [x] 3. 实现数据库层和持久化
   - 创建 database.py 模块，实现 SQLite 数据库连接和操作
   - 实现知识库元数据表的 CRUD 操作
   - 实现问答历史记录表的 CRUD 操作
@@ -22,7 +22,7 @@
   - 编写数据库操作的单元测试
   - _Requirements: 4.4, 4.5_
 
-- [ ] 4. 集成 ChromaDB 向量存储
+- [x] 4. 集成 ChromaDB 向量存储
   - 创建 vector_store.py 模块，封装 ChromaDB 客户端
   - 实现向量集合的创建、删除和管理功能
   - 集成 shaw/dmeta-embedding-zh-small-q4 嵌入模型
@@ -30,7 +30,7 @@
   - 编写向量存储操作的单元测试
   - _Requirements: 1.5, 6.1, 6.5_
 
-- [ ] 5. 实现文档处理器
+- [x] 5. 实现文档处理器
   - 创建 document_processor.py 模块，集成 LlamaIndex 文档加载器
   - 实现 PDF、TXT、MD、EPUB 文件格式的解析支持
   - 添加文档分块和预处理功能
@@ -38,7 +38,7 @@
   - 编写文档处理的单元测试，包含各种文件格式
   - _Requirements: 1.1, 1.2, 1.4, 6.4_
 
-- [ ] 6. 实现知识库管理器
+- [-] 6. 实现知识库管理器
   - 创建 knowledge_base_manager.py 模块，整合文档处理和向量存储
   - 实现知识库的创建、删除和列表功能
   - 实现文档导入和向量化流程

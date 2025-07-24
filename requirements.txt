@@ -1,0 +1,30 @@
+# Core dependencies for Knowledge QA System
+# Install with: pip install -r requirements.txt
+
+# Core framework
+click>=8.1.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# Document processing
+llama-index>=0.9.0
+llama-index-readers-file>=0.1.0
+pypdf>=3.0.0
+python-docx>=0.8.11
+ebooklib>=0.18
+
+# Vector storage
+chromadb>=0.4.0
+
+# LLM integration
+ollama>=0.1.0
+requests>=2.31.0
+
+# Utilities
+python-dotenv>=1.0.0
+rich>=13.0.0
+tqdm>=4.65.0
+
+# Logging and configuration
+loguru>=0.7.0
+pyyaml>=6.0
