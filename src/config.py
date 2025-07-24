@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from loguru import logger
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
 
@@ -52,9 +53,10 @@ class Settings(BaseSettings):
     # Answer evaluation settings
     evaluation_temperature: float = 0.3
     
-    class Config:
-        env_file = ".env"
-        env_prefix = "KNOWLEDGE_QA_"
+    model_config = ConfigDict(
+        env_file=".env",
+        env_prefix="KNOWLEDGE_QA_"
+    )
 
 
 def setup_logging(settings: Settings) -> None:
