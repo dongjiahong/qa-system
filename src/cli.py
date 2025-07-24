@@ -268,56 +268,275 @@ class KnowledgeCLI:
                 console.print("\n[yellow]会话已取消[/yellow]")
                 break
     
-    def show_history(self, kb_name: str, limit: int = 10, page: int = 1):
+    def show_history(
+        self, 
+        kb_name: str, 
+        limit: int = 10, 
+        page: int = 1,
+        filter_correct: Optional[bool] = None,
+        min_score: Optional[float] = None,
+        max_score: Optional[float] = None,
+        search: Optional[str] = None,
+        sort_by: str = "time",
+        sort_order: str = "desc",
+        detailed: bool = False
+    ):
         """显示历史记录"""
+        from .history_manager import HistoryFilter, SortField, SortOrder
+        
         # 检查知识库是否存在
         kb = self.kb_manager.get_knowledge_base(kb_name)
         if not kb:
             raise KnowledgeBaseNotFoundError(f"知识库 '{kb_name}' 不存在")
         
-        # 获取历史记录
-        offset = (page - 1) * limit
-        records = self.history_manager.get_history(kb_name, limit, offset)
+        # 构建过滤条件
+        filter_criteria = HistoryFilter(
+            kb_name=kb_name,
+            is_correct=filter_correct,
+            min_score=min_score,
+            max_score=max_score,
+            question_contains=search
+        )
         
-        if not records:
-            console.print(f"[yellow]知识库 '{kb_name}' 暂无历史记录[/yellow]")
+        # 设置排序
+        sort_field_map = {
+            "time": SortField.CREATED_AT,
+            "score": SortField.SCORE,
+            "result": SortField.IS_CORRECT
+        }
+        sort_field = sort_field_map.get(sort_by, SortField.CREATED_AT)
+        sort_order_enum = SortOrder.DESC if sort_order.lower() == "desc" else SortOrder.ASC
+        
+        # 获取历史记录
+        if any([filter_correct is not None, min_score is not None, max_score is not None, search]):
+            # 使用过滤功能
+            history_page = self.history_manager.get_filtered_history(
+                filter_criteria, page, limit, sort_field, sort_order_enum
+            )
+        else:
+            # 使用普通分页
+            history_page = self.history_manager.get_history_page(
+                kb_name, page, limit, sort_field, sort_order_enum
+            )
+        
+        if not history_page.records:
+            if any([filter_correct is not None, min_score is not None, max_score is not None, search]):
+                console.print(f"[yellow]没有找到符合条件的历史记录[/yellow]")
+            else:
+                console.print(f"[yellow]知识库 '{kb_name}' 暂无历史记录[/yellow]")
             return
         
+        # 显示统计信息
+        stats = self.history_manager.get_statistics(kb_name)
+        self._display_history_stats(kb_name, stats)
+        
+        if detailed:
+            # 详细视图
+            self._display_detailed_history(history_page.records, history_page.pagination)
+        else:
+            # 表格视图
+            self._display_history_table(kb_name, history_page.records, history_page.pagination, page)
+        
+        # 显示分页信息和操作提示
+        self._display_pagination_info(history_page.pagination)
+        self._display_history_help(kb_name)
+    
+    def show_history_detail(self, kb_name: str, record_id: int):
+        """显示单个历史记录的详细信息"""
+        # 检查知识库是否存在
+        kb = self.kb_manager.get_knowledge_base(kb_name)
+        if not kb:
+            raise KnowledgeBaseNotFoundError(f"知识库 '{kb_name}' 不存在")
+        
+        # 获取记录
+        record = self.history_manager.get_record_by_id(record_id)
+        if not record:
+            console.print(f"[red]记录 ID {record_id} 不存在[/red]")
+            return
+        
+        if record.kb_name != kb_name:
+            console.print(f"[red]记录 ID {record_id} 不属于知识库 '{kb_name}'[/red]")
+            return
+        
+        # 显示详细信息
+        self._display_single_record_detail(record)
+    
+    def export_history(self, kb_name: str, format: str = "json", output_file: Optional[str] = None):
+        """导出历史记录"""
+        # 检查知识库是否存在
+        kb = self.kb_manager.get_knowledge_base(kb_name)
+        if not kb:
+            raise KnowledgeBaseNotFoundError(f"知识库 '{kb_name}' 不存在")
+        
+        # 导出数据
+        data = show_progress(
+            f"导出 '{kb_name}' 历史记录...",
+            self.history_manager.export_history,
+            kb_name, format
+        )
+        
+        # 保存到文件或显示
+        if output_file:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(data)
+            console.print(f"[green]✓[/green] 历史记录已导出到: {output_file}")
+        else:
+            console.print(data)
+    
+    def _display_history_stats(self, kb_name: str, stats: Dict[str, Any]):
+        """显示历史统计信息"""
+        if stats['total_count'] == 0:
+            return
+        
+        accuracy = stats.get('accuracy_rate', 0)
+        avg_score = stats.get('average_score', 0)
+        recent_activity = stats.get('recent_activity_count', 0)
+        
+        stats_text = []
+        stats_text.append(f"总记录: {stats['total_count']}")
+        stats_text.append(f"正确率: {accuracy:.1f}%")
+        stats_text.append(f"平均分: {avg_score:.1f}")
+        stats_text.append(f"近7天: {recent_activity}条")
+        
+        console.print(Panel(
+            " | ".join(stats_text),
+            title=f"[bold cyan]{kb_name} 统计信息[/bold cyan]",
+            border_style="cyan",
+            padding=(0, 1)
+        ))
+        console.print()
+    
+    def _display_history_table(self, kb_name: str, records: List, pagination, page: int):
+        """显示历史记录表格"""
         # 创建表格
-        table = Table(title=f"知识库 '{kb_name}' 历史记录 (第 {page} 页)")
-        table.add_column("序号", style="dim", width=6)
+        title_parts = [f"知识库 '{kb_name}' 历史记录"]
+        if pagination.total_pages > 1:
+            title_parts.append(f"(第 {page}/{pagination.total_pages} 页)")
+        
+        table = Table(title=" ".join(title_parts))
+        table.add_column("ID", style="dim", width=6)
         table.add_column("时间", style="cyan", width=16)
-        table.add_column("问题", style="white", width=40)
+        table.add_column("问题", style="white", width=45)
         table.add_column("结果", style="green", width=8)
         table.add_column("分数", style="yellow", width=8)
+        table.add_column("操作", style="blue", width=12)
         
-        for i, record in enumerate(records, 1):
+        for record in records:
             result_text = "✓ 正确" if record.evaluation.is_correct else "✗ 错误"
             result_style = "green" if record.evaluation.is_correct else "red"
             
             # 截断长问题
             question_text = record.question
-            if len(question_text) > 35:
-                question_text = question_text[:32] + "..."
+            if len(question_text) > 40:
+                question_text = question_text[:37] + "..."
             
             table.add_row(
-                str(offset + i),
+                str(record.id),
                 record.created_at.strftime("%m-%d %H:%M"),
                 question_text,
                 Text(result_text, style=result_style),
-                f"{record.evaluation.score:.1f}"
+                f"{record.evaluation.score:.1f}",
+                f"[blue]详情[/blue]"
             )
         
         console.print(table)
+    
+    def _display_detailed_history(self, records: List, pagination):
+        """显示详细历史记录"""
+        for i, record in enumerate(records, 1):
+            if i > 1:
+                console.print("\n" + "─" * 80 + "\n")
+            
+            self._display_single_record_detail(record, show_header=True)
+    
+    def _display_single_record_detail(self, record, show_header: bool = False):
+        """显示单个记录的详细信息"""
+        if show_header:
+            header = f"记录 #{record.id} - {record.created_at.strftime('%Y-%m-%d %H:%M:%S')}"
+            console.print(f"[bold cyan]{header}[/bold cyan]")
+            console.print()
         
-        # 显示分页信息
-        total_records = self.history_manager.get_history_count(kb_name)
-        total_pages = (total_records + limit - 1) // limit
+        # 问题
+        console.print(Panel(
+            record.question,
+            title="[bold blue]问题[/bold blue]",
+            border_style="blue",
+            padding=(1, 2)
+        ))
         
-        if total_pages > 1:
-            console.print(f"\n[dim]第 {page}/{total_pages} 页，共 {total_records} 条记录[/dim]")
-            if page < total_pages:
-                console.print(f"[dim]使用 --page {page + 1} 查看下一页[/dim]")
+        # 用户答案
+        console.print(Panel(
+            record.user_answer,
+            title="[bold green]您的答案[/bold green]",
+            border_style="green",
+            padding=(1, 2)
+        ))
+        
+        # 评估结果
+        result_color = "green" if record.evaluation.is_correct else "red"
+        result_text = "正确" if record.evaluation.is_correct else "错误"
+        
+        eval_content = []
+        eval_content.append(f"[bold]结果:[/bold] [{result_color}]{result_text}[/{result_color}]")
+        eval_content.append(f"[bold]分数:[/bold] {record.evaluation.score:.1f}/100")
+        eval_content.append("")
+        eval_content.append(f"[bold]反馈:[/bold]\n{record.evaluation.feedback}")
+        
+        if record.evaluation.strengths:
+            eval_content.append("")
+            eval_content.append("[bold green]优点:[/bold green]")
+            for strength in record.evaluation.strengths:
+                eval_content.append(f"  • {strength}")
+        
+        if record.evaluation.missing_points:
+            eval_content.append("")
+            eval_content.append("[bold yellow]需要补充:[/bold yellow]")
+            for point in record.evaluation.missing_points:
+                eval_content.append(f"  • {point}")
+        
+        console.print(Panel(
+            "\n".join(eval_content),
+            title="[bold yellow]评估结果[/bold yellow]",
+            border_style="yellow",
+            padding=(1, 2)
+        ))
+        
+        # 参考答案
+        console.print(Panel(
+            record.evaluation.reference_answer,
+            title="[bold magenta]参考答案[/bold magenta]",
+            border_style="magenta",
+            padding=(1, 2)
+        ))
+    
+    def _display_pagination_info(self, pagination):
+        """显示分页信息"""
+        if pagination.total_pages <= 1:
+            return
+        
+        info_parts = []
+        info_parts.append(f"第 {pagination.page}/{pagination.total_pages} 页")
+        info_parts.append(f"共 {pagination.total_count} 条记录")
+        
+        console.print(f"\n[dim]{' | '.join(info_parts)}[/dim]")
+        
+        # 导航提示
+        nav_parts = []
+        if pagination.has_prev:
+            nav_parts.append(f"--page {pagination.page - 1} (上一页)")
+        if pagination.has_next:
+            nav_parts.append(f"--page {pagination.page + 1} (下一页)")
+        
+        if nav_parts:
+            console.print(f"[dim]使用 {' 或 '.join(nav_parts)}[/dim]")
+    
+    def _display_history_help(self, kb_name: str):
+        """显示历史记录操作帮助"""
+        console.print(f"\n[dim]💡 提示:[/dim]")
+        console.print(f"[dim]  • 查看详情: knowledge {kb_name} review history --detailed[/dim]")
+        console.print(f"[dim]  • 过滤记录: knowledge {kb_name} review history --correct/--incorrect[/dim]")
+        console.print(f"[dim]  • 搜索问题: knowledge {kb_name} review history --search '关键词'[/dim]")
+        console.print(f"[dim]  • 导出记录: knowledge {kb_name} review export[/dim]")
     
     def list_knowledge_bases(self):
         """列出所有知识库"""
@@ -498,7 +717,7 @@ def main():
     pass
 
 
-@main.command("new")
+@main.command("new", help="创建新的知识库")
 @click.option("--name", "-n", required=True, help="知识库名称")
 @click.option("--file", "-f", "files", multiple=True, required=True, help="文档文件路径 (可多次使用)")
 @click.option("--description", "-d", help="知识库描述")
@@ -508,14 +727,14 @@ def create_knowledge_base(name: str, files: tuple, description: Optional[str]):
     cli_instance.create_knowledge_base(name, list(files), description)
 
 
-@main.command("list")
+@main.command("list", help="列出所有知识库")
 @handle_error
 def list_knowledge_bases():
     """列出所有知识库"""
     cli_instance.list_knowledge_bases()
 
 
-@main.command("delete")
+@main.command("delete", help="删除知识库")
 @click.argument("name")
 @click.option("--force", "-f", is_flag=True, help="强制删除，不询问确认")
 @handle_error
@@ -524,7 +743,7 @@ def delete_knowledge_base(name: str, force: bool):
     cli_instance.delete_knowledge_base(name, force)
 
 
-@main.command("status")
+@main.command("status", help="显示系统状态")
 @handle_error
 def show_system_status():
     """显示系统状态"""
@@ -552,12 +771,45 @@ def start_new_review(ctx):
 @review.command("history")
 @click.option("--limit", "-l", default=10, help="显示记录数量 (默认: 10)")
 @click.option("--page", "-p", default=1, help="页码 (默认: 1)")
+@click.option("--correct", "filter_correct", flag_value=True, help="只显示正确的记录")
+@click.option("--incorrect", "filter_correct", flag_value=False, help="只显示错误的记录")
+@click.option("--min-score", type=float, help="最低分数过滤")
+@click.option("--max-score", type=float, help="最高分数过滤")
+@click.option("--search", "-s", help="搜索问题内容")
+@click.option("--sort-by", type=click.Choice(['time', 'score', 'result']), default='time', help="排序字段 (默认: time)")
+@click.option("--sort-order", type=click.Choice(['asc', 'desc']), default='desc', help="排序顺序 (默认: desc)")
+@click.option("--detailed", "-d", is_flag=True, help="显示详细信息")
 @click.pass_context
 @handle_error
-def show_history(ctx, limit: int, page: int):
+def show_history(ctx, limit: int, page: int, filter_correct: Optional[bool], min_score: Optional[float], 
+                max_score: Optional[float], search: Optional[str], sort_by: str, sort_order: str, detailed: bool):
     """查看问答历史记录"""
     kb_name = ctx.obj['kb_name']
-    cli_instance.show_history(kb_name, limit, page)
+    cli_instance.show_history(
+        kb_name, limit, page, filter_correct, min_score, max_score, 
+        search, sort_by, sort_order, detailed
+    )
+
+
+@review.command("detail")
+@click.argument("record_id", type=int)
+@click.pass_context
+@handle_error
+def show_history_detail(ctx, record_id: int):
+    """查看单个历史记录的详细信息"""
+    kb_name = ctx.obj['kb_name']
+    cli_instance.show_history_detail(kb_name, record_id)
+
+
+@review.command("export")
+@click.option("--format", "-f", type=click.Choice(['json', 'csv']), default='json', help="导出格式 (默认: json)")
+@click.option("--output", "-o", help="输出文件路径")
+@click.pass_context
+@handle_error
+def export_history(ctx, format: str, output: Optional[str]):
+    """导出历史记录"""
+    kb_name = ctx.obj['kb_name']
+    cli_instance.export_history(kb_name, format, output)
 
 
 if __name__ == "__main__":

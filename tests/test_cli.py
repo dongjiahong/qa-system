@@ -317,21 +317,30 @@ class TestKnowledgeCLI:
     
     def test_show_history_no_records(self, cli_instance):
         """测试显示历史记录 - 无记录"""
+        from src.history_manager import HistoryPage, PaginationInfo
+        
         # 模拟知识库存在
         mock_kb = KnowledgeBase(name="test_kb", created_at=datetime.now())
         cli_instance.kb_manager.get_knowledge_base.return_value = mock_kb
         
         # 模拟无历史记录
-        cli_instance.history_manager.get_history.return_value = []
+        empty_page = HistoryPage(
+            records=[],
+            pagination=PaginationInfo(page=1, page_size=10, total_count=0)
+        )
+        cli_instance.history_manager.get_history_page.return_value = empty_page
+        cli_instance.history_manager.get_statistics.return_value = {'total_count': 0}
         
         # 执行测试
         cli_instance.show_history("test_kb")
         
         # 验证调用
-        cli_instance.history_manager.get_history.assert_called_once_with("test_kb", 10, 0)
+        cli_instance.history_manager.get_history_page.assert_called_once()
     
     def test_show_history_with_records(self, cli_instance):
         """测试显示历史记录 - 有记录"""
+        from src.history_manager import HistoryPage, PaginationInfo
+        
         # 模拟知识库存在
         mock_kb = KnowledgeBase(name="test_kb", created_at=datetime.now())
         cli_instance.kb_manager.get_knowledge_base.return_value = mock_kb
@@ -344,21 +353,33 @@ class TestKnowledgeCLI:
             reference_answer="参考答案"
         )
         mock_record = QARecord(
+            id=1,
             kb_name="test_kb",
             question="测试问题",
             user_answer="用户答案",
             evaluation=mock_evaluation,
             created_at=datetime.now()
         )
-        cli_instance.history_manager.get_history.return_value = [mock_record]
-        cli_instance.history_manager.get_history_count.return_value = 1
+        
+        # 模拟分页结果
+        history_page = HistoryPage(
+            records=[mock_record],
+            pagination=PaginationInfo(page=1, page_size=10, total_count=1, total_pages=1)
+        )
+        cli_instance.history_manager.get_history_page.return_value = history_page
+        cli_instance.history_manager.get_statistics.return_value = {
+            'total_count': 1,
+            'accuracy_rate': 100.0,
+            'average_score': 85.0,
+            'recent_activity_count': 1
+        }
         
         # 执行测试
         cli_instance.show_history("test_kb")
         
         # 验证调用
-        cli_instance.history_manager.get_history.assert_called_once_with("test_kb", 10, 0)
-        cli_instance.history_manager.get_history_count.assert_called_once_with("test_kb")
+        cli_instance.history_manager.get_history_page.assert_called_once()
+        cli_instance.history_manager.get_statistics.assert_called_once_with("test_kb")
     
     def test_list_knowledge_bases_empty(self, cli_instance):
         """测试列出知识库 - 空列表"""
@@ -562,7 +583,7 @@ class TestClickCommands:
     
     @patch('src.cli.cli_instance')
     def test_show_history_command(self, mock_cli_instance):
-        """测试显示历���记录命令"""
+        """测试显示历史记录命令"""
         runner = CliRunner()
         result = runner.invoke(show_history, ['--limit', '5', '--page', '2'], obj={'kb_name': 'test_kb'})
         
@@ -570,7 +591,9 @@ class TestClickCommands:
             print(f"Command output: {result.output}")
             print(f"Exception: {result.exception}")
         
-        mock_cli_instance.show_history.assert_called_once_with('test_kb', 5, 2)
+        mock_cli_instance.show_history.assert_called_once_with(
+            'test_kb', 5, 2, False, None, None, None, 'time', 'desc', False
+        )
 
 
 class TestEvaluationResultDisplay:
