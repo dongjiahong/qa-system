@@ -1,0 +1,57 @@
+{
+    "app_name": "Knowledge QA System",
+    "version": "0.1.0",
+    "debug": false,
+    "database": {
+        "db_path": "data/qa_history.db",
+        "chroma_persist_directory": "data/chroma_db"
+    },
+    "ollama": {
+        "ollama_base_url": "http://localhost:11434",
+        "ollama_model": "qwen3:1.7b",
+        "ollama_timeout": 60,
+        "ollama_max_retries": 3,
+        "ollama_retry_delay": 1.0
+    },
+    "embedding": {
+        "embedding_model": "shaw/dmeta-embedding-zh-small-q4"
+    },
+    "logging": {
+        "log_level": "INFO",
+        "log_file": "logs/knowledge_qa.log",
+        "log_max_size": "10 MB",
+        "log_retention": "7 days"
+    },
+    "file_processing": {
+        "supported_file_extensions": [
+            ".pdf",
+            ".txt",
+            ".md",
+            ".epub"
+        ],
+        "max_file_size_mb": 100,
+        "max_files_per_kb": 100
+    },
+    "question_generation": {
+        "max_context_length": 4000,
+        "question_generation_temperature": 0.7,
+        "question_max_retries": 3
+    },
+    "answer_evaluation": {
+        "evaluation_temperature": 0.3,
+        "evaluation_max_retries": 3
+    },
+    "ui": {
+        "cli_colors": true,
+        "progress_bars": true,
+        "verbose_output": false
+    },
+    "performance": {
+        "vector_search_k": 5,
+        "chunk_size": 1000,
+        "chunk_overlap": 200
+    },
+    "health_check": {
+        "health_check_timeout": 10
+    }
+}
