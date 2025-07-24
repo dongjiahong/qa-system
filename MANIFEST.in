@@ -1,0 +1,39 @@
+# Include additional files in the package distribution
+include README.md
+include LICENSE
+include requirements.txt
+include requirements-dev.txt
+include .env.example
+
+# Include documentation
+recursive-include docs *.md *.rst *.txt
+
+# Include example files
+recursive-include examples *.py *.md *.txt *.pdf
+
+# Include test files (optional, for source distributions)
+recursive-include tests *.py
+
+# Exclude development and build artifacts
+exclude .coverage
+exclude coverage.xml
+exclude .gitignore
+exclude Makefile
+exclude demo_interactive_qa.py
+exclude test_doc.txt
+
+# Exclude cache and build directories
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+recursive-exclude .pytest_cache *
+recursive-exclude htmlcov *
+recursive-exclude logs *
+recursive-exclude data *
+recursive-exclude .git *
+recursive-exclude .kiro *
+
+# Exclude Docker and deployment files from source distribution
+exclude Dockerfile
+exclude docker-compose.yml
+exclude deploy.sh
+exclude check_environment.py

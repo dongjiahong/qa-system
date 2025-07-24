@@ -19,6 +19,7 @@ from llama_index.core.node_parser import SentenceSplitter
 
 from .models import FileProcessingError, ValidationError
 from .config import get_config
+from .chinese_text_processor import get_chinese_text_processor
 
 
 class DocumentProcessor:
@@ -44,7 +45,10 @@ class DocumentProcessor:
             chunk_overlap=200,
         )
         
-        logger.info("DocumentProcessor initialized")
+        # 初始化中文文本处理器
+        self.chinese_processor = get_chinese_text_processor()
+        
+        logger.info("DocumentProcessor initialized with Chinese text optimization")
     
     def validate_file_format(self, file_path: str) -> bool:
         """
@@ -204,7 +208,7 @@ class DocumentProcessor:
     
     def chunk_documents(self, documents: List[Document]) -> List[Document]:
         """
-        对文档进行分块处理
+        对文档进行分块处理，优化中文文本分块
         
         Args:
             documents: 原始文档列表
@@ -219,32 +223,48 @@ class DocumentProcessor:
             if not documents:
                 return []
             
-            logger.info(f"Chunking {len(documents)} documents")
+            logger.info(f"Chunking {len(documents)} documents with Chinese optimization")
             
-            # 使用文本分割器进行分块
-            nodes = self.text_splitter.get_nodes_from_documents(documents)
-            
-            # 将节点转换回文档格式
             chunked_documents = []
-            for i, node in enumerate(nodes):
-                # 创建新的文档对象
-                doc = Document(
-                    text=node.text,
-                    metadata=node.metadata.copy(),
-                )
+            chunk_id = 0
+            
+            for doc in documents:
+                # 分析文本的中文特征
+                text_stats = self.chinese_processor.analyze_text(doc.text)
                 
-                # 添加分块信息
-                doc.metadata.update({
-                    'chunk_id': i,
-                    'chunk_size': len(node.text),
-                    'total_chunks': len(nodes),
-                })
+                # 根据中文比例选择分块策略
+                if text_stats.chinese_ratio > 0.5:
+                    # 使用优化的中文分块
+                    chunks = self.chinese_processor.smart_chunk_chinese_text(
+                        doc.text, 
+                        chunk_size=1000, 
+                        overlap=200
+                    )
+                    logger.debug(f"Used Chinese chunking for document with {text_stats.chinese_ratio:.2f} Chinese ratio")
+                else:
+                    # 使用标准分块
+                    nodes = self.text_splitter.get_nodes_from_documents([doc])
+                    chunks = [node.text for node in nodes]
+                    logger.debug(f"Used standard chunking for document with {text_stats.chinese_ratio:.2f} Chinese ratio")
                 
-                # 如果有节点ID，也添加到元数据中
-                if hasattr(node, 'node_id') and node.node_id:
-                    doc.metadata['node_id'] = node.node_id
-                
-                chunked_documents.append(doc)
+                # 创建分块文档
+                for chunk_text in chunks:
+                    chunk_doc = Document(
+                        text=chunk_text,
+                        metadata=doc.metadata.copy(),
+                    )
+                    
+                    # 添加分块信息
+                    chunk_doc.metadata.update({
+                        'chunk_id': chunk_id,
+                        'chunk_size': len(chunk_text),
+                        'total_chunks': len(chunks),
+                        'chinese_ratio': text_stats.chinese_ratio,
+                        'chunking_method': 'chinese_optimized' if text_stats.chinese_ratio > 0.5 else 'standard'
+                    })
+                    
+                    chunked_documents.append(chunk_doc)
+                    chunk_id += 1
             
             logger.info(f"Successfully chunked into {len(chunked_documents)} chunks")
             return chunked_documents
@@ -331,7 +351,7 @@ class DocumentProcessor:
     
     def process_multiple_files(self, file_paths: List[str]) -> List[Document]:
         """
-        批量处理多个文件
+        批量处理多个文件，支持并行处理优化
         
         Args:
             file_paths: 文件路径列表
@@ -346,18 +366,38 @@ class DocumentProcessor:
             if not file_paths:
                 return []
             
-            logger.info(f"Processing {len(file_paths)} files")
+            logger.info(f"Processing {len(file_paths)} files with performance optimization")
             
             all_documents = []
             failed_files = []
             
-            for file_path in file_paths:
-                try:
-                    documents = self.process_file(file_path)
-                    all_documents.extend(documents)
-                except Exception as e:
-                    logger.error(f"Failed to process file {file_path}: {e}")
-                    failed_files.append((file_path, str(e)))
+            # 对于大量文件，使用并行处理
+            if len(file_paths) > 5:
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+                
+                with ThreadPoolExecutor(max_workers=4) as executor:
+                    future_to_path = {
+                        executor.submit(self.process_file, file_path): file_path 
+                        for file_path in file_paths
+                    }
+                    
+                    for future in as_completed(future_to_path):
+                        file_path = future_to_path[future]
+                        try:
+                            documents = future.result()
+                            all_documents.extend(documents)
+                        except Exception as e:
+                            logger.error(f"Failed to process file {file_path}: {e}")
+                            failed_files.append((file_path, str(e)))
+            else:
+                # 对于少量文件，使用串行处理
+                for file_path in file_paths:
+                    try:
+                        documents = self.process_file(file_path)
+                        all_documents.extend(documents)
+                    except Exception as e:
+                        logger.error(f"Failed to process file {file_path}: {e}")
+                        failed_files.append((file_path, str(e)))
             
             # 如果有文件处理失败，记录警告
             if failed_files:
@@ -416,3 +456,117 @@ class DocumentProcessor:
         except Exception as e:
             logger.error(f"Error getting file info for {file_path}: {e}")
             raise ValidationError(f"获取文件信息失败: {str(e)}")
+    
+    async def async_process_multiple_files(self, file_paths: List[str]) -> List[Document]:
+        """
+        异步批量处理多个文件
+        
+        Args:
+            file_paths: 文件路径列表
+            
+        Returns:
+            List[Document]: 所有文件的文档列表
+            
+        Raises:
+            FileProcessingError: 批量处理失败
+        """
+        try:
+            if not file_paths:
+                return []
+            
+            logger.info(f"Async processing {len(file_paths)} files")
+            
+            import asyncio
+            
+            async def process_single_file(file_path: str) -> List[Document]:
+                """异步处理单个文件"""
+                loop = asyncio.get_event_loop()
+                return await loop.run_in_executor(None, self.process_file, file_path)
+            
+            # 创建异步任务
+            tasks = [process_single_file(file_path) for file_path in file_paths]
+            
+            # 等待所有任务完成
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # 处理结果和异常
+            all_documents = []
+            failed_files = []
+            
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"Failed to process file {file_paths[i]}: {str(result)}")
+                    failed_files.append((file_paths[i], str(result)))
+                else:
+                    all_documents.extend(result)
+            
+            # 如果有文件处理失败，记录警告
+            if failed_files:
+                failed_list = "\n".join([f"  - {path}: {error}" for path, error in failed_files])
+                logger.warning(f"Failed to process {len(failed_files)} files:\n{failed_list}")
+            
+            # 如果所有文件都失败了，抛出异常
+            if not all_documents and file_paths:
+                raise FileProcessingError("所有文件处理都失败了")
+            
+            logger.info(f"Successfully async processed {len(all_documents)} documents from {len(file_paths) - len(failed_files)} files")
+            return all_documents
+            
+        except FileProcessingError:
+            raise
+        except Exception as e:
+            logger.error(f"Async batch file processing error: {e}")
+            raise FileProcessingError(f"异步批量文件处理失败: {str(e)}")
+    
+    def get_processing_performance_stats(self, file_paths: List[str]) -> Dict[str, Any]:
+        """
+        获取文件处理性能统计
+        
+        Args:
+            file_paths: 文件路径列表
+            
+        Returns:
+            Dict[str, Any]: 性能统计信息
+        """
+        import time
+        
+        start_time = time.time()
+        
+        try:
+            documents = self.process_multiple_files(file_paths)
+            processing_time = time.time() - start_time
+            
+            # 统计文档信息
+            total_chars = sum(len(doc.text) for doc in documents)
+            total_chunks = len(documents)
+            
+            # 分析中文内容比例
+            chinese_docs = 0
+            total_chinese_chars = 0
+            
+            for doc in documents:
+                stats = self.chinese_processor.analyze_text(doc.text)
+                if stats.chinese_ratio > 0.5:
+                    chinese_docs += 1
+                total_chinese_chars += stats.chinese_chars
+            
+            return {
+                "total_files": len(file_paths),
+                "total_documents": len(documents),
+                "total_chunks": total_chunks,
+                "total_chars": total_chars,
+                "chinese_documents": chinese_docs,
+                "chinese_ratio": total_chinese_chars / total_chars if total_chars > 0 else 0.0,
+                "processing_time": processing_time,
+                "chars_per_second": total_chars / processing_time if processing_time > 0 else 0.0,
+                "files_per_second": len(file_paths) / processing_time if processing_time > 0 else 0.0
+            }
+            
+        except Exception as e:
+            processing_time = time.time() - start_time
+            return {
+                "total_files": len(file_paths),
+                "error": str(e),
+                "processing_time": processing_time,
+                "success": False
+            }

@@ -5,6 +5,7 @@ Command Line Interface for Knowledge QA System
 
 import sys
 import traceback
+import signal
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 import click
@@ -12,7 +13,10 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+from rich.prompt import Confirm, Prompt
+from rich.live import Live
+from rich.status import Status
 from rich import print as rich_print
 
 from .models import (
@@ -28,7 +32,8 @@ from .knowledge_base_manager import KnowledgeBaseManager
 from .question_generator import QuestionGenerator
 from .answer_evaluator import AnswerEvaluator
 from .history_manager import HistoryManager
-from .config import get_config
+from .config import get_config, validate_system_requirements, save_config_file
+from .help_system import help_system
 
 # 初始化Rich控制台
 console = Console()
@@ -36,63 +41,191 @@ console = Console()
 
 def handle_error(func):
     """
-    错误处理装饰器
+    增强的错误处理装饰器
     
-    统一处理各种异常，提供用户友好的错误信息
+    统一处理各种异常，提供用户友好的错误信息和解决建议
     """
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
         except FileProcessingError as e:
-            console.print(f"[red]文件处理错误:[/red] {e.message}", style="red")
+            console.print(Panel(
+                f"[red]{e.message}[/red]",
+                title="[bold red]文件处理错误[/bold red]",
+                border_style="red"
+            ))
+            
+            # 提供解决建议
+            suggestions = [
+                "检查文件格式是否支持 (PDF, TXT, MD, EPUB)",
+                "确认文件大小不超过 100MB",
+                "验证文件未损坏且可正常打开",
+                "检查文件路径是否正确"
+            ]
+            
+            console.print("\n[yellow]💡 解决建议:[/yellow]")
+            for suggestion in suggestions:
+                console.print(f"  • {suggestion}")
+            
             if e.details:
-                console.print(f"详细信息: {e.details}")
+                console.print(f"\n[dim]详细信息: {e.details}[/dim]")
+            
+            console.print(f"\n[dim]获取更多帮助: knowledge --troubleshoot file_processing[/dim]")
+            console.print(f"[dim]环境检查: knowledge --check-env[/dim]")
             sys.exit(1)
+            
         except ModelServiceError as e:
-            console.print(f"[red]模型服务错误:[/red] {e.message}", style="red")
-            console.print("请检查 Ollama 服务是否正常运行")
+            console.print(Panel(
+                f"[red]{e.message}[/red]",
+                title="[bold red]模型服务错误[/bold red]",
+                border_style="red"
+            ))
+            
+            suggestions = [
+                "检查 Ollama 服务是否运行: ollama serve",
+                "验证模型是否已安装: ollama list",
+                "拉取所需模型: ollama pull qwen3:1.7b",
+                "检查服务地址配置是否正确"
+            ]
+            
+            console.print("\n[yellow]💡 解决建议:[/yellow]")
+            for suggestion in suggestions:
+                console.print(f"  • {suggestion}")
+            
             if e.details:
-                console.print(f"详细信息: {e.details}")
+                console.print(f"\n[dim]详细信息: {e.details}[/dim]")
+            
+            console.print(f"\n[dim]获取更多帮助: knowledge --troubleshoot ollama_connection[/dim]")
+            console.print(f"[dim]环境检查: knowledge --check-env[/dim]")
             sys.exit(1)
+            
         except DatabaseError as e:
-            console.print(f"[red]数据库错误:[/red] {e.message}", style="red")
-            console.print("请检查数据库文件权限和磁盘空间")
+            console.print(Panel(
+                f"[red]{e.message}[/red]",
+                title="[bold red]数据库错误[/bold red]",
+                border_style="red"
+            ))
+            
+            suggestions = [
+                "检查数据目录权限: ls -la data/",
+                "验证磁盘空间: df -h",
+                "检查数据库文件完整性",
+                "重启应用程序"
+            ]
+            
+            console.print("\n[yellow]💡 解决建议:[/yellow]")
+            for suggestion in suggestions:
+                console.print(f"  • {suggestion}")
+            
             if e.details:
-                console.print(f"详细信息: {e.details}")
+                console.print(f"\n[dim]详细信息: {e.details}[/dim]")
+            
+            console.print(f"\n[dim]获取更多帮助: knowledge --troubleshoot database_issues[/dim]")
+            console.print(f"[dim]环境检查: knowledge --check-env[/dim]")
             sys.exit(1)
+            
         except VectorStoreError as e:
-            console.print(f"[red]向量存储错误:[/red] {e.message}", style="red")
-            console.print("请检查 ChromaDB 服务是否正常运行")
+            console.print(Panel(
+                f"[red]{e.message}[/red]",
+                title="[bold red]向量存储错误[/bold red]",
+                border_style="red"
+            ))
+            
+            suggestions = [
+                "检查 ChromaDB 数据目录权限",
+                "验证磁盘空间是否充足",
+                "重启应用程序",
+                "清理损坏的向量数据"
+            ]
+            
+            console.print("\n[yellow]💡 解决建议:[/yellow]")
+            for suggestion in suggestions:
+                console.print(f"  • {suggestion}")
+            
             if e.details:
-                console.print(f"详细信息: {e.details}")
+                console.print(f"\n[dim]详细信息: {e.details}[/dim]")
+            
             sys.exit(1)
+            
         except KnowledgeBaseNotFoundError as e:
-            console.print(f"[yellow]知识库不存在:[/yellow] {e.message}", style="yellow")
-            console.print("使用 'knowledge list' 查看可用的知识库")
+            console.print(Panel(
+                f"[yellow]{e.message}[/yellow]",
+                title="[bold yellow]知识库不存在[/bold yellow]",
+                border_style="yellow"
+            ))
+            
+            console.print("\n[blue]💡 可用操作:[/blue]")
+            console.print("  • 查看所有知识库: [cyan]knowledge list[/cyan]")
+            console.print("  • 创建新知识库: [cyan]knowledge new --name <名称> --file <文件>[/cyan]")
+            
             sys.exit(1)
+            
         except ValidationError as e:
-            console.print(f"[yellow]参数验证错误:[/yellow] {e.message}", style="yellow")
+            console.print(Panel(
+                f"[yellow]{e.message}[/yellow]",
+                title="[bold yellow]参数验证错误[/bold yellow]",
+                border_style="yellow"
+            ))
+            
             if e.details:
-                console.print(f"详细信息: {e.details}")
+                console.print(f"\n[dim]详细信息: {e.details}[/dim]")
+            
+            console.print(f"\n[blue]💡 获取帮助:[/blue] [cyan]knowledge --help[/cyan]")
             sys.exit(1)
+            
         except KnowledgeSystemError as e:
-            console.print(f"[red]系统错误:[/red] {e.message}", style="red")
+            console.print(Panel(
+                f"[red]{e.message}[/red]",
+                title="[bold red]系统错误[/bold red]",
+                border_style="red"
+            ))
+            
             if e.details:
-                console.print(f"详细信息: {e.details}")
+                console.print(f"\n[dim]详细信息: {e.details}[/dim]")
+            
+            console.print(f"\n[blue]💡 获取帮助:[/blue]")
+            console.print("  • 检查系统状态: [cyan]knowledge status[/cyan]")
+            console.print("  • 查看故障排除: [cyan]knowledge --troubleshoot[/cyan]")
             sys.exit(1)
+            
         except click.ClickException:
             # Click异常直接抛出，由Click处理
             raise
+            
         except KeyboardInterrupt:
-            console.print("\n[yellow]操作已取消[/yellow]")
+            console.print("\n[yellow]⚠ 操作已取消[/yellow]")
             sys.exit(0)
+            
         except Exception as e:
-            console.print(f"[red]未知错误:[/red] {str(e)}", style="red")
-            console.print("\n[dim]详细错误信息:[/dim]")
-            console.print(traceback.format_exc())
+            console.print(Panel(
+                f"[red]发生未预期的错误: {str(e)}[/red]",
+                title="[bold red]未知错误[/bold red]",
+                border_style="red"
+            ))
+            
+            config = get_config()
+            if config.debug:
+                console.print("\n[dim]详细错误信息:[/dim]")
+                console.print(traceback.format_exc())
+            else:
+                console.print("\n[dim]使用 --debug 选项查看详细错误信息[/dim]")
+            
+            console.print(f"\n[blue]💡 获取帮助:[/blue]")
+            console.print("  • 检查系统状态: [cyan]knowledge status[/cyan]")
+            console.print("  • 报告问题: 请提供错误信息和操作步骤")
             sys.exit(1)
     
     return wrapper
+
+
+def setup_signal_handlers():
+    """设置信号处理器，优雅处理中断"""
+    def signal_handler(signum, frame):
+        console.print("\n[yellow]⚠ 收到中断信号，正在清理...[/yellow]")
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
 
 
 def validate_file_paths(files: List[str]) -> List[str]:
@@ -135,7 +268,7 @@ def validate_file_paths(files: List[str]) -> List[str]:
 
 def show_progress(description: str, task_func, *args, **kwargs):
     """
-    显示进度指示器
+    增强的进度指示器
     
     Args:
         description: 任务描述
@@ -145,20 +278,208 @@ def show_progress(description: str, task_func, *args, **kwargs):
     Returns:
         任务函数的返回值
     """
+    config = get_config()
+    
+    if not config.progress_bars:
+        # 简单文本提示
+        console.print(f"[dim]{description}...[/dim]")
+        return task_func(*args, **kwargs)
+    
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
+        BarColumn(bar_width=None),
+        TimeElapsedColumn(),
         console=console,
         transient=True
     ) as progress:
         task = progress.add_task(description, total=None)
         try:
             result = task_func(*args, **kwargs)
-            progress.update(task, description=f"✓ {description}")
+            progress.update(task, description=f"✅ {description}")
             return result
         except Exception as e:
-            progress.update(task, description=f"✗ {description}")
+            progress.update(task, description=f"❌ {description}")
             raise
+
+
+def show_status(message: str):
+    """显示状态信息"""
+    config = get_config()
+    if config.progress_bars:
+        return Status(message, console=console)
+    else:
+        console.print(f"[dim]{message}...[/dim]")
+        return None
+
+
+def confirm_action(message: str, default: bool = False) -> bool:
+    """确认用户操作"""
+    return Confirm.ask(message, default=default, console=console)
+
+
+def get_user_input(prompt: str, default: Optional[str] = None) -> str:
+    """获取用户输入"""
+    return Prompt.ask(prompt, default=default, console=console)
+
+
+def show_environment_check():
+    """显示环境检查结果"""
+    console.print(Panel(
+        "环境和依赖检查",
+        title="[bold cyan]系统检查[/bold cyan]",
+        border_style="cyan"
+    ))
+    
+    # 检查系统需求
+    validation = validate_system_requirements()
+    
+    # 显示 Python 版本
+    python_info = validation["components"].get("python", {})
+    python_status = python_info.get("status", "unknown")
+    python_version = python_info.get("version", "unknown")
+    
+    status_color = "green" if python_status == "healthy" else "red"
+    console.print(f"Python 版本: [{status_color}]{python_version}[/{status_color}]")
+    
+    # 显示包状态
+    console.print("\n[bold yellow]依赖包状态:[/bold yellow]")
+    
+    required_packages = [
+        "click", "rich", "pydantic", "loguru", "chromadb", 
+        "llama-index", "requests"
+    ]
+    
+    for package in required_packages:
+        if package in validation["components"]:
+            pkg_status = validation["components"][package]["status"]
+            status_color = "green" if pkg_status == "healthy" else "red"
+            status_text = "✅ 已安装" if pkg_status == "healthy" else "❌ 缺失"
+            console.print(f"  {package}: [{status_color}]{status_text}[/{status_color}]")
+    
+    # 显示配置验证
+    console.print("\n[bold yellow]配置验证:[/bold yellow]")
+    config = get_config()
+    config_validation = config.validate_environment()
+    
+    if config_validation["status"] == "healthy":
+        console.print("[green]✅ 配置正常[/green]")
+    else:
+        console.print("[red]❌ 配置有问题[/red]")
+        for issue in config_validation["issues"]:
+            console.print(f"  • [red]{issue}[/red]")
+    
+    # 显示警告
+    if config_validation["warnings"]:
+        console.print("\n[bold yellow]⚠️ 警告:[/bold yellow]")
+        for warning in config_validation["warnings"]:
+            console.print(f"  • [yellow]{warning}[/yellow]")
+    
+    # 显示总体状态
+    overall_status = "healthy" if validation["status"] == "healthy" and config_validation["status"] == "healthy" else "unhealthy"
+    status_color = "green" if overall_status == "healthy" else "red"
+    status_text = "正常" if overall_status == "healthy" else "异常"
+    
+    console.print(f"\n[bold]总体状态: [{status_color}]{status_text}[/{status_color}][/bold]")
+    
+    if overall_status != "healthy":
+        console.print(f"\n[dim]使用 'knowledge --troubleshoot' 获取解决方案[/dim]")
+
+
+def show_environment_check():
+    """显示环境检查结果"""
+    console.print(Panel(
+        "环境和依赖检查",
+        title="[bold cyan]系统诊断[/bold cyan]",
+        border_style="cyan"
+    ))
+    
+    # 检查系统需求
+    sys_validation = validate_system_requirements()
+    
+    # 显示 Python 环境
+    python_info = sys_validation["components"].get("python", {})
+    python_status = python_info.get("status", "unknown")
+    python_version = python_info.get("version", "unknown")
+    
+    status_color = "green" if python_status == "healthy" else "red"
+    console.print(f"Python 版本: [{status_color}]{python_version}[/{status_color}]")
+    
+    # 检查依赖包
+    console.print(f"\n[bold yellow]依赖包状态:[/bold yellow]")
+    
+    table = Table(show_header=True, header_style="bold blue")
+    table.add_column("包名", style="cyan", width=25)
+    table.add_column("状态", style="white", width=10)
+    table.add_column("说明", style="dim", width=30)
+    
+    for package, info in sys_validation["components"].items():
+        if package == "python":
+            continue
+            
+        status = info.get("status", "unknown")
+        status_color = "green" if status == "healthy" else "red"
+        status_text = "✓ 正常" if status == "healthy" else "✗ 缺失"
+        
+        description = ""
+        if package == "chromadb":
+            description = "向量数据库"
+        elif package == "llama-index":
+            description = "文档处理框架"
+        elif package == "click":
+            description = "命令行界面"
+        elif package == "rich":
+            description = "终端美化"
+        
+        table.add_row(
+            package,
+            Text(status_text, style=status_color),
+            description
+        )
+    
+    console.print(table)
+    
+    # 检查配置
+    config = get_config()
+    config_validation = config.validate_environment()
+    
+    console.print(f"\n[bold yellow]配置检查:[/bold yellow]")
+    
+    config_status = config_validation["status"]
+    status_color = "green" if config_status == "healthy" else "red"
+    status_text = "正常" if config_status == "healthy" else "异常"
+    
+    console.print(f"配置状态: [{status_color}]{status_text}[/{status_color}]")
+    
+    # 显示问题和警告
+    if config_validation["issues"]:
+        console.print(f"\n[bold red]发现问题:[/bold red]")
+        for issue in config_validation["issues"]:
+            console.print(f"  • {issue}")
+    
+    if config_validation["warnings"]:
+        console.print(f"\n[bold yellow]警告:[/bold yellow]")
+        for warning in config_validation["warnings"]:
+            console.print(f"  • {warning}")
+    
+    # 显示建议
+    console.print(f"\n[bold blue]建议操作:[/bold blue]")
+    
+    if sys_validation["status"] != "healthy":
+        console.print("  • 安装缺失的依赖包: pip install -r requirements.txt")
+    
+    if config_validation["status"] != "healthy":
+        console.print("  • 检查数据目录权限")
+        console.print("  • 验证磁盘空间")
+    
+    console.print("  • 启动 Ollama 服务: ollama serve")
+    console.print("  • 拉取所需模型: ollama pull qwen3:1.7b")
+    console.print("  • 检查系统状态: knowledge status")
+    
+    # 显示配置文件位置
+    config_file = Path.home() / ".knowledge_qa" / "config.json"
+    console.print(f"\n[dim]配置文件位置: {config_file}[/dim]")
+    console.print(f"[dim]日志文件位置: {config.log_file}[/dim]")
 
 
 class KnowledgeCLI:
@@ -702,19 +1023,110 @@ cli_instance = KnowledgeCLI()
 
 
 # ============================================================================
+# 配置管理命令
+# ============================================================================
+# ============================================================================
 # Click命令定义
 # ============================================================================
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.version_option(version="0.1.0", prog_name="knowledge")
+@click.option("--debug", is_flag=True, help="启用调试模式")
+@click.option("--verbose", "-v", is_flag=True, help="显示详细输出")
+@click.option("--config", type=click.Path(exists=True), help="指定配置文件路径")
+@click.option("--no-color", is_flag=True, help="禁用彩色输出")
+@click.option("--help-command", help="显示特定命令的详细帮助")
+@click.option("--examples", type=click.Choice(['getting_started', 'advanced_usage', 'troubleshooting']), 
+              help="显示使用示例")
+@click.option("--troubleshoot", help="显示特定问题的故障排除指南")
+@click.option("--troubleshoot-all", is_flag=True, help="显示所有故障排除指南")
+@click.option("--quick-start", is_flag=True, help="显示快速开始指南")
+@click.option("--check-env", is_flag=True, help="检查环境和依赖")
 @click.help_option("--help", "-h")
-def main():
+@click.pass_context
+def main(ctx, debug, verbose, config, no_color, help_command, examples, troubleshoot, troubleshoot_all, quick_start, check_env):
     """
-    知识库问答系统
+    🧠 知识库问答系统 (Knowledge QA System)
     
     基于向量检索和大语言模型的智能学习工具
+    
+    \b
+    快速开始:
+      knowledge new -n my-kb -f document.pdf    # 创建知识库
+      knowledge my-kb review new                # 开始学习
+      knowledge my-kb review history            # 查看历史
+    
+    \b
+    获取帮助:
+      knowledge --help-command new             # 命令详细帮助
+      knowledge --examples getting_started     # 使用示例
+      knowledge --troubleshoot                 # 故障排除
+      knowledge --quick-start                  # 快速开始指南
     """
-    pass
+    # 设置信号处理器
+    setup_signal_handlers()
+    
+    # 处理配置
+    if config:
+        from pathlib import Path
+        get_config(Path(config), force_reload=True)
+    
+    config_obj = get_config()
+    
+    # 设置调试和详细模式
+    if debug:
+        config_obj.debug = True
+        config_obj.log_level = "DEBUG"
+    
+    if verbose:
+        config_obj.verbose_output = True
+    
+    if no_color:
+        config_obj.cli_colors = False
+        console._color_system = None
+    
+    # Debug: print received options
+    if config_obj.debug:
+        console.print(f"[dim]Debug: quick_start={quick_start}, help_command={help_command}[/dim]")
+    
+    # 处理帮助选项
+    if help_command:
+        help_system.show_command_help(help_command)
+        ctx.exit()
+    
+    if examples:
+        help_system.show_examples(examples)
+        ctx.exit()
+    
+    if troubleshoot:
+        help_system.show_troubleshooting(troubleshoot)
+        ctx.exit()
+    
+    if troubleshoot_all:
+        help_system.show_troubleshooting()
+        ctx.exit()
+    
+    if quick_start:
+        help_system.show_quick_start()
+        ctx.exit()
+    
+    if check_env:
+        show_environment_check()
+        ctx.exit()
+    
+    # 如果没有子命令，显示帮助
+    if ctx.invoked_subcommand is None:
+        help_system.show_available_commands()
+        
+        # 显示系统状态摘要
+        try:
+            validation = validate_system_requirements()
+            if validation["status"] != "healthy":
+                console.print(f"\n[yellow]⚠ 系统检查发现问题，使用 'knowledge status' 查看详情[/yellow]")
+        except Exception:
+            pass
+        
+        ctx.exit()
 
 
 @main.command("new", help="创建新的知识库")
@@ -748,6 +1160,209 @@ def delete_knowledge_base(name: str, force: bool):
 def show_system_status():
     """显示系统状态"""
     cli_instance.show_system_status()
+
+
+@main.group("config", help="配置管理")
+def config_group():
+    """配置管理命令组"""
+    pass
+
+
+@config_group.command("show", help="显示当前配置")
+@click.option("--sensitive", is_flag=True, help="显示敏感信息")
+@handle_error
+def show_config(sensitive: bool):
+    """显示当前配置"""
+    from .config_manager import config_manager
+    config_manager.show_config(show_sensitive=sensitive)
+
+
+@config_group.command("validate", help="验证配置")
+@handle_error
+def validate_config():
+    """验证配置"""
+    from .config_manager import config_manager
+    validation_result = config_manager.validate_config()
+    config_manager.show_validation_result(validation_result)
+
+
+@config_group.command("save", help="保存当前配置")
+@click.option("--path", type=click.Path(), help="保存路径")
+@handle_error
+def save_config(path: Optional[str]):
+    """保存当前配置"""
+    from .config_manager import config_manager
+    save_path = Path(path) if path else None
+    config_manager.save_current_config(save_path)
+
+
+@config_group.command("load", help="加载配置文件")
+@click.argument("config_path", type=click.Path(exists=True))
+@handle_error
+def load_config(config_path: str):
+    """加载配置文件"""
+    from .config_manager import config_manager
+    config_manager.load_config(Path(config_path))
+
+
+@config_group.command("backup", help="备份当前配置")
+@click.option("--name", help="备份名称")
+@handle_error
+def backup_config(name: Optional[str]):
+    """备份当前配置"""
+    from .config_manager import config_manager
+    config_manager.backup_config(name)
+
+
+@config_group.command("restore", help="恢复配置")
+@click.argument("backup_path", type=click.Path(exists=True))
+@handle_error
+def restore_config(backup_path: str):
+    """恢复配置"""
+    from .config_manager import config_manager
+    if confirm_action(f"确认从 {backup_path} 恢复配置吗？"):
+        config_manager.restore_config(Path(backup_path))
+    else:
+        console.print("[yellow]恢复已取消[/yellow]")
+
+
+@config_group.command("reset", help="重置为默认配置")
+@click.option("--force", is_flag=True, help="强制重置，不询问确认")
+@handle_error
+def reset_config(force: bool):
+    """重置为默认配置"""
+    from .config_manager import config_manager
+    
+    if force or confirm_action("确认重置配置为默认值吗？此操作会备份当前配置"):
+        config_manager.reset_to_defaults()
+    else:
+        console.print("[yellow]重置已取消[/yellow]")
+
+
+@config_group.group("template", help="配置模板管理")
+def template_group():
+    """配置模板管理命令组"""
+    pass
+
+
+@template_group.command("list", help="列出所有模板")
+@handle_error
+def list_templates():
+    """列出所有模板"""
+    from .config_manager import config_manager
+    config_manager.list_templates()
+
+
+@template_group.command("apply", help="应用配置模板")
+@click.argument("template_name")
+@handle_error
+def apply_template(template_name: str):
+    """应用配置模板"""
+    from .config_manager import config_manager
+    
+    if confirm_action(f"确认应用模板 '{template_name}' 吗？当前配置会被备份"):
+        config_manager.apply_template(template_name)
+    else:
+        console.print("[yellow]应用已取消[/yellow]")
+
+
+@template_group.command("create", help="创建自定义模板")
+@click.argument("name")
+@click.option("--description", "-d", required=True, help="模板描述")
+@click.option("--from-current", is_flag=True, help="基于当前配置创建")
+@handle_error
+def create_template(name: str, description: str, from_current: bool):
+    """创建自定义模板"""
+    from .config_manager import config_manager
+    
+    if from_current:
+        # 基于当前配置创建模板
+        current_config = config_manager.get_current_config()
+        settings = {}
+        
+        # 选择要包含的设置
+        console.print("[blue]选择要包含在模板中的设置类别:[/blue]")
+        categories = {
+            "ollama": ["ollama_timeout", "ollama_max_retries", "ollama_retry_delay"],
+            "performance": ["vector_search_k", "chunk_size", "chunk_overlap"],
+            "ui": ["cli_colors", "progress_bars", "verbose_output"],
+            "logging": ["log_level", "debug"],
+            "generation": ["question_generation_temperature", "evaluation_temperature"]
+        }
+        
+        for category, keys in categories.items():
+            if confirm_action(f"包含 {category} 设置？"):
+                for key in keys:
+                    if hasattr(current_config, key):
+                        settings[key] = getattr(current_config, key)
+        
+        config_manager.create_template(name, description, settings)
+    else:
+        # 交互式创建模板
+        console.print("[blue]交互式创建模板 (输入空值跳过):[/blue]")
+        settings = {}
+        
+        # 常用设置
+        common_settings = {
+            "debug": ("调试模式", bool),
+            "log_level": ("日志级别", str),
+            "ollama_timeout": ("Ollama 超时时间", int),
+            "cli_colors": ("彩色输出", bool),
+            "progress_bars": ("进度条", bool)
+        }
+        
+        for key, (desc, type_func) in common_settings.items():
+            value = get_user_input(f"{desc} ({key})")
+            if value:
+                try:
+                    if type_func == bool:
+                        settings[key] = value.lower() in ['true', '1', 'yes', 'y']
+                    else:
+                        settings[key] = type_func(value)
+                except ValueError:
+                    console.print(f"[yellow]跳过无效值: {value}[/yellow]")
+        
+        if settings:
+            config_manager.create_template(name, description, settings)
+        else:
+            console.print("[yellow]未提供任何设置，模板创建已取消[/yellow]")
+
+
+@template_group.command("delete", help="删除自定义模板")
+@click.argument("name")
+@click.option("--force", is_flag=True, help="强制删除，不询问确认")
+@handle_error
+def delete_template(name: str, force: bool):
+    """删除自定义模板"""
+    from .config_manager import config_manager
+    
+    if force or confirm_action(f"确认删除模板 '{name}' 吗？"):
+        config_manager.delete_template(name)
+    else:
+        console.print("[yellow]删除已取消[/yellow]")
+
+
+@config_group.command("export", help="导出配置")
+@click.argument("export_path", type=click.Path())
+@click.option("--include-sensitive", is_flag=True, help="包含敏感信息")
+@handle_error
+def export_config(export_path: str, include_sensitive: bool):
+    """导出配置"""
+    from .config_manager import config_manager
+    config_manager.export_config(Path(export_path), include_sensitive)
+
+
+@config_group.command("import", help="导入配置")
+@click.argument("import_path", type=click.Path(exists=True))
+@handle_error
+def import_config(import_path: str):
+    """导入配置"""
+    from .config_manager import config_manager
+    
+    if confirm_action(f"确认从 {import_path} 导入配置吗？当前配置会被备份"):
+        config_manager.import_config(Path(import_path))
+    else:
+        console.print("[yellow]导入已取消[/yellow]")
 
 
 @main.group()
