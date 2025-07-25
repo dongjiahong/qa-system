@@ -128,6 +128,9 @@ class QuestionGenerator:
         self.llm_client = llm_client or get_ollama_client()
         self.validator = QuestionQualityValidator()
         
+        # 问题历史记录，用于去重
+        self.question_history: Dict[str, set] = {}  # kb_name -> set of content_hash
+        
         logger.info("QuestionGenerator initialized")
     
     def generate_question(
@@ -135,7 +138,8 @@ class QuestionGenerator:
         kb_name: str,
         difficulty: QuestionDifficulty = QuestionDifficulty.EASY,
         strategy: ContentSelectionStrategy = ContentSelectionStrategy.RANDOM,
-        max_retries: int = 3
+        max_retries: int = 3,
+        allow_duplicates: bool = False
     ) -> Question:
         """
         生成问题
@@ -145,6 +149,7 @@ class QuestionGenerator:
             difficulty: 问题难度
             strategy: 内容选择策略
             max_retries: 最大重试次数
+            allow_duplicates: 是否允许重复问题
             
         Returns:
             Question: 生成的问题对象
@@ -164,6 +169,10 @@ class QuestionGenerator:
         stats = self.vector_store.get_collection_stats(kb_name)
         if stats["document_count"] == 0:
             raise KnowledgeSystemError(f"Knowledge base '{kb_name}' is empty")
+        
+        # 初始化该知识库的问题历史记录
+        if kb_name not in self.question_history:
+            self.question_history[kb_name] = set()
         
         last_error = None
         
@@ -193,6 +202,17 @@ class QuestionGenerator:
                     source_context=context.content,
                     difficulty=difficulty
                 )
+                
+                # 5. 检查是否重复（如果不允许重复）
+                if not allow_duplicates and question.content_hash in self.question_history[kb_name]:
+                    logger.warning(f"Generated question is duplicate, retrying...")
+                    if attempt < max_retries - 1:
+                        continue
+                    else:
+                        logger.warning(f"All attempts generated duplicate questions, returning anyway")
+                
+                # 6. 记录问题到历史
+                self.question_history[kb_name].add(question.content_hash)
                 
                 logger.info(f"Successfully generated question: {question.id}")
                 return question
@@ -626,6 +646,92 @@ class QuestionGenerator:
                 score -= 2.5
         
         return max(0.0, min(10.0, score))
+    
+    def clear_question_history(self, kb_name: str) -> None:
+        """
+        清除指定知识库的问题历史记录
+        
+        Args:
+            kb_name: 知识库名称
+        """
+        if kb_name in self.question_history:
+            self.question_history[kb_name].clear()
+            logger.info(f"Cleared question history for kb '{kb_name}'")
+    
+    def get_question_history_count(self, kb_name: str) -> int:
+        """
+        获取指定知识库的历史问题数量
+        
+        Args:
+            kb_name: 知识库名称
+            
+        Returns:
+            int: 历史问题数量
+        """
+        return len(self.question_history.get(kb_name, set()))
+    
+    def is_question_duplicate(self, question_content: str, kb_name: str) -> bool:
+        """
+        检查问题是否重复
+        
+        Args:
+            question_content: 问题内容
+            kb_name: 知识库名称
+            
+        Returns:
+            bool: 是否重复
+        """
+        import hashlib
+        content_for_hash = f"{kb_name}:{question_content.strip().lower()}"
+        content_hash = hashlib.md5(content_for_hash.encode('utf-8')).hexdigest()
+        
+        return content_hash in self.question_history.get(kb_name, set())
+    
+    def generate_question_with_skip_support(
+        self,
+        kb_name: str,
+        difficulty: QuestionDifficulty = QuestionDifficulty.EASY,
+        strategy: ContentSelectionStrategy = ContentSelectionStrategy.RANDOM,
+        max_attempts: int = 5
+    ) -> Question:
+        """
+        生成问题，支持跳过重复问题
+        
+        Args:
+            kb_name: 知识库名称
+            difficulty: 问题难度
+            strategy: 内容选择策略
+            max_attempts: 最大尝试次数
+            
+        Returns:
+            Question: 生成的问题对象
+            
+        Raises:
+            KnowledgeSystemError: 无法生成新问题
+        """
+        for attempt in range(max_attempts):
+            try:
+                question = self.generate_question(
+                    kb_name=kb_name,
+                    difficulty=difficulty,
+                    strategy=strategy,
+                    allow_duplicates=False
+                )
+                return question
+            except Exception as e:
+                if attempt == max_attempts - 1:
+                    # 最后一次尝试，允许重复
+                    logger.warning(f"Failed to generate unique question after {max_attempts} attempts, allowing duplicates")
+                    return self.generate_question(
+                        kb_name=kb_name,
+                        difficulty=difficulty,
+                        strategy=strategy,
+                        allow_duplicates=True
+                    )
+                logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
+                continue
+        
+        raise KnowledgeSystemError(f"Failed to generate question after {max_attempts} attempts")
 
 
 # 全局问题生成器实例

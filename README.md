@@ -55,11 +55,12 @@ git clone <repository-url>
 cd knowledge-qa-system
 
 # 创建虚拟环境
-python -m venv venv
-source venv/bin/activate  # macOS/Linux
-# 或 venv\Scripts\activate  # Windows
+conda create -n llamaindex python=3.12
 
 # 安装依赖
+pip install -r requirements.txt
+
+# 按装
 pip install -e .
 ```
 
@@ -152,31 +153,6 @@ knowledge delete <知识库名称>
 knowledge --help
 ```
 
-## 项目结构
-
-```
-knowledge-qa-system/
-├── src/
-│   ├── knowledge_qa/
-│   │   ├── __init__.py
-│   │   ├── cli.py                 # 命令行界面
-│   │   ├── models.py              # 数据模型
-│   │   ├── database.py            # 数据库操作
-│   │   ├── vector_store.py        # 向量存储
-│   │   ├── document_processor.py  # 文档处理
-│   │   ├── knowledge_base_manager.py  # 知识库管理
-│   │   ├── llm_client.py          # LLM 客户端
-│   │   ├── question_generator.py  # 问题生成
-│   │   ├── answer_evaluator.py    # 答案评估
-│   │   └── history_manager.py     # 历史管理
-├── tests/                         # 测试文件
-├── docs/                          # 文档
-├── examples/                      # 示例文件
-├── pyproject.toml                 # 项目配置
-├── README.md
-└── .gitignore
-```
-
 ## 开发指南
 
 ### 运行测试
@@ -207,18 +183,7 @@ mypy src/
 
 ## 配置
 
-系统支持通过环境变量进行配置：
-
-```bash
-# Ollama 服务地址
-export OLLAMA_BASE_URL=http://localhost:11434
-
-# 数据存储目录
-export KNOWLEDGE_DATA_DIR=~/.knowledge_qa
-
-# 日志级别
-export LOG_LEVEL=INFO
-```
+查看配置文件`cnofig.json.example`
 
 ## 📖 文档和示例
 
@@ -313,156 +278,12 @@ knowledge --troubleshoot ollama_connection
 knowledge --quick-start
 ```
 
-## 贡献指南
-
-1. Fork 项目
-2. 创建功能分支：`git checkout -b feature/new-feature`
-3. 提交更改：`git commit -am 'Add new feature'`
-4. 推送分支：`git push origin feature/new-feature`
-5. 创建 Pull Request
-
-## 许可证
-
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
-
-## 🧪 测试
-
-### 运行测试
-```bash
-# 运行所有测试
-pytest
-
-# 运行集成测试
-pytest tests/test_integration_simple.py -v
-
-# 运行测试并生成覆盖率报告
-pytest --cov=src --cov-report=html
-
-# 运行特定测试
-pytest tests/test_knowledge_base_manager.py
-```
-
-### 测试覆盖率
-当前测试覆盖率约为 72%，包括：
-- 单元测试：各组件独立功能测试
-- 集成测试：组件间交互测试
-- 用户体验测试：CLI界面和错误处理测试
-
-## 🚀 生产环境配置
-
-```bash
-# 设置生产环境配置
-knowledge config template apply production
-
-# 配置环境变量
-export KNOWLEDGE_DATA_DIR=/var/lib/knowledge_qa
-export OLLAMA_BASE_URL=http://localhost:11434
-export LOG_LEVEL=INFO
-
-# 创建系统服务（可选）
-sudo systemctl enable ollama
-sudo systemctl start ollama
-```
-
-## 🤝 贡献指南
-
-### 开发环境设置
-```bash
-# 克隆项目
-git clone <repository-url>
-cd knowledge-qa-system
-
-# 安装开发依赖
-pip install -e ".[dev]"
-
-# 安装pre-commit钩子
-pre-commit install
-```
-
-### 代码规范
-```bash
-# 代码格式化
-black src/ tests/
-isort src/ tests/
-
-# 代码检查
-flake8 src/ tests/
-mypy src/
-
-# 运行所有检查
-make lint
-```
-
-### 提交流程
-1. Fork 项目
-2. 创建功能分支：`git checkout -b feature/new-feature`
-3. 编写代码和测试
-4. 运行测试：`pytest`
-5. 提交更改：`git commit -am 'Add new feature'`
-6. 推送分支：`git push origin feature/new-feature`
-7. 创建 Pull Request
-
-## 📊 性能指标
-
-### 系统性能
-- 文档处理速度：~1MB/秒
-- 问题生成时间：2-5秒
-- 答案评估时间：3-8秒
-- 向量检索时间：<1秒
-
-### 资源使用
-- 内存使用：~500MB（基础运行）
-- 磁盘空间：~100MB（每个知识库）
-- CPU使用：中等（处理时）
-
-## 🔮 路线图
-
-### v0.2.0 (计划中)
-- [ ] Web界面支持
-- [ ] 批量问答模式
-- [ ] 学习进度分析
-- [ ] 多用户支持
-
-### v0.3.0 (计划中)
-- [ ] 插件系统
-- [ ] 自定义模型支持
-- [ ] 云端同步
-- [ ] 移动端应用
-
-### v1.0.0 (目标)
-- [ ] 企业级功能
-- [ ] 高可用部署
-- [ ] 完整API文档
-- [ ] 多语言支持
-
-## 📄 许可证
-
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
-
-## 🙏 致谢
-
-感谢以下开源项目的支持：
-- [LlamaIndex](https://github.com/run-llama/llama_index) - 文档处理框架
-- [ChromaDB](https://github.com/chroma-core/chroma) - 向量数据库
-- [Ollama](https://github.com/ollama/ollama) - 本地LLM服务
-- [Click](https://github.com/pallets/click) - 命令行界面框架
-
 ## 📞 支持
 
 如果遇到问题或有功能建议，请：
 
 1. 查看 [使用指南](docs/usage_guide.md)
 2. 运行 `knowledge --troubleshoot-all`
-3. 搜索现有 [Issues](../../issues)
-4. 创建新的 Issue 描述问题
-
-### 社区
-- 讨论：[GitHub Discussions](../../discussions)
-- 问题报告：[GitHub Issues](../../issues)
-- 功能请求：[GitHub Issues](../../issues)
-
----
-
-**注意**: 本项目目前处于开发阶段，API 可能会发生变化。建议在生产环境使用前等待稳定版本发布。
+3. 创建新的 Issue 描述问题
 
 ⭐ 如果这个项目对您有帮助，请给我们一个星标！

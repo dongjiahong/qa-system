@@ -491,13 +491,17 @@ class KnowledgeCLI:
             raise KnowledgeBaseNotFoundError(f"知识库 '{kb_name}' 不存在")
 
         console.print(f"[blue]开始 '{kb_name}' 知识库问答会话[/blue]")
-        console.print("输入 'quit' 或 'exit' 退出会话\n")
+        console.print("输入 'quit' 或 'exit' 退出会话")
+        console.print("输入 'skip' 跳过当前问题")
+        console.print("输入 'clear' 清除问题历史记录\n")
 
         while True:
             try:
-                # 生成问题
+                # 生成问题（使用支持去重的方法）
                 question = show_progress(
-                    "生成问题中...", self.question_generator.generate_question, kb_name
+                    "生成问题中...", 
+                    self.question_generator.generate_question_with_skip_support, 
+                    kb_name
                 )
 
                 # 显示问题
@@ -509,18 +513,33 @@ class KnowledgeCLI:
                     )
                 )
 
+                # 显示问题统计信息
+                history_count = self.question_generator.get_question_history_count(kb_name)
+                console.print(f"[dim]已生成问题数: {history_count}[/dim]")
+
                 # 获取用户答案
                 user_answer = console.input(
-                    "\n[bold green]请输入您的答案:[/bold green] "
+                    "\n[bold green]请输入您的答案 (或输入 'skip' 跳过):[/bold green] "
                 )
 
-                # 检查退出命令
+                # 检查特殊命令
                 if user_answer.lower() in ["quit", "exit", "退出"]:
                     console.print("[yellow]会话已结束[/yellow]")
                     break
+                
+                if user_answer.lower() in ["skip", "跳过"]:
+                    console.print("[yellow]已跳过当前问题[/yellow]")
+                    console.print("\n" + "=" * 50 + "\n")
+                    continue
+                
+                if user_answer.lower() in ["clear", "清除"]:
+                    self.question_generator.clear_question_history(kb_name)
+                    console.print("[green]已清除问题历史记录[/green]")
+                    console.print("\n" + "=" * 50 + "\n")
+                    continue
 
                 if not user_answer.strip():
-                    console.print("[yellow]答案不能为空，请重新输入[/yellow]")
+                    console.print("[yellow]答案不能为空，请重新输入或输入 'skip' 跳过[/yellow]")
                     continue
 
                 # 评估答案

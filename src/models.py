@@ -151,10 +151,16 @@ class Question:
     difficulty: QuestionDifficulty = QuestionDifficulty.MEDIUM
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     created_at: datetime = field(default_factory=datetime.now)
+    content_hash: Optional[str] = None  # 用于去重的内容哈希
     
     def __post_init__(self):
         """数据验证"""
         self.validate()
+        # 生成内容哈希用于去重
+        if not self.content_hash:
+            import hashlib
+            content_for_hash = f"{self.kb_name}:{self.content.strip().lower()}"
+            self.content_hash = hashlib.md5(content_for_hash.encode('utf-8')).hexdigest()
     
     def validate(self) -> None:
         """验证数据模型"""
@@ -185,6 +191,7 @@ class Question:
             "source_context": self.source_context,
             "difficulty": self.difficulty.value,
             "created_at": self.created_at.isoformat(),
+            "content_hash": self.content_hash,
         }
     
     @classmethod
@@ -197,6 +204,7 @@ class Question:
             source_context=data["source_context"],
             difficulty=QuestionDifficulty(data["difficulty"]),
             created_at=datetime.fromisoformat(data["created_at"]),
+            content_hash=data.get("content_hash"),
         )
     
     def to_json(self) -> str:
