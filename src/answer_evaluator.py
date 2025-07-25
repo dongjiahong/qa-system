@@ -371,10 +371,9 @@ class AnswerEvaluator:
 {{
     "is_correct": true/false,
     "score": 0-10的分数,
-    "feedback": "详细的反馈说明，包括答案的优缺点",
+    "feedback": "详细的反馈说明，包括答案的问题和改进建议",
     "reference_answer": "基于参考知识的标准答案",
-    "missing_points": ["缺失的要点1", "缺失的要点2"],
-    "strengths": ["答案的优点1", "答案的优点2"]
+    "missing_points": ["缺失的要点1", "缺失的要点2"]
 }}
 
 评估标准：
@@ -387,10 +386,9 @@ class AnswerEvaluator:
 - 如果答案基本正确且完整，is_correct为true，分数7分以上
 - 如果答案部分正确但有重要遗漏，is_correct为false，分数4-7分
 - 如果答案错误或严重不完整，is_correct为false，分数4分以下
-- feedback应该具体指出答案的问题和改进建议
+- feedback应该具体指出答案的问题和改进建议，重点关注需要改进的地方
 - reference_answer应该基于参考知识给出完整准确的答案
 - missing_points列出答案中缺失的重要要点
-- strengths列出答案中的优点和正确之处
 
 请确保返回有效的JSON格式："""
 
@@ -421,7 +419,6 @@ class AnswerEvaluator:
             
             # 确保可选字段存在
             evaluation_data.setdefault("missing_points", [])
-            evaluation_data.setdefault("strengths", [])
             
             # 验证数据类型和范围
             if not isinstance(evaluation_data["is_correct"], bool):
@@ -439,7 +436,7 @@ class AnswerEvaluator:
                 feedback=str(evaluation_data["feedback"]),
                 reference_answer=str(evaluation_data["reference_answer"]),
                 missing_points=evaluation_data["missing_points"],
-                strengths=evaluation_data["strengths"],
+                strengths=[],  # 不再使用优点部分
                 status=EvaluationStatus.SUCCESS
             )
             
@@ -511,7 +508,7 @@ class AnswerEvaluator:
             feedback=f"评估结果解析失败，原始反馈：{response[:200]}...",
             reference_answer="无法解析参考答案",
             missing_points=["评估结果解析失败"],
-            strengths=[] if not is_correct else ["答案包含正确信息"],
+            strengths=[],
             status=EvaluationStatus.PARTIAL
         )
     

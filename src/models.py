@@ -152,6 +152,7 @@ class Question:
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     created_at: datetime = field(default_factory=datetime.now)
     content_hash: Optional[str] = None  # 用于去重的内容哈希
+    background_info: Optional[str] = None  # 问题背景信息
     
     def __post_init__(self):
         """数据验证"""
@@ -192,6 +193,7 @@ class Question:
             "difficulty": self.difficulty.value,
             "created_at": self.created_at.isoformat(),
             "content_hash": self.content_hash,
+            "background_info": self.background_info,
         }
     
     @classmethod
@@ -205,6 +207,7 @@ class Question:
             difficulty=QuestionDifficulty(data["difficulty"]),
             created_at=datetime.fromisoformat(data["created_at"]),
             content_hash=data.get("content_hash"),
+            background_info=data.get("background_info"),
         )
     
     def to_json(self) -> str:

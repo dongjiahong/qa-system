@@ -184,7 +184,9 @@ class QuestionGenerator:
                 context = self._select_content_for_question(kb_name, strategy)
                 
                 # 2. 生成问题
-                question_content = self._generate_question_content(context, difficulty)
+                question_data = self._generate_question_content(context, difficulty)
+                question_content = question_data["question"]
+                background_info = question_data["background"]
                 
                 # 3. 验证问题质量
                 is_valid, issues = self.validator.validate_question(question_content)
@@ -200,7 +202,8 @@ class QuestionGenerator:
                     content=question_content,
                     kb_name=kb_name,
                     source_context=context.content,
-                    difficulty=difficulty
+                    difficulty=difficulty,
+                    background_info=background_info
                 )
                 
                 # 5. 检查是否重复（如果不允许重复）
@@ -392,15 +395,23 @@ class QuestionGenerator:
                 max_tokens=1000  # 限制问题长度
             )
             
-            question = response.response.strip()
+            response_text = response.response.strip()
             
-            # 清理生成的问题
-            question = self._clean_generated_question(question)
+            # 尝试解析JSON格式的响应
+            try:
+                import json
+                response_data = json.loads(self._clean_json_response(response_text))
+                question = response_data.get("question", "").strip()
+                background = response_data.get("background", "").strip()
+            except (json.JSONDecodeError, KeyError):
+                # 如果不是JSON格式，按原来的方式处理
+                question = self._clean_generated_question(response_text)
+                background = ""
             
             if not question:
                 raise ModelServiceError("Generated question is empty after cleaning")
             
-            return question
+            return {"question": question, "background": background}
             
         except Exception as e:
             logger.error(f"Failed to generate question content: {str(e)}")
@@ -447,7 +458,7 @@ class QuestionGenerator:
         diff_info = difficulty_instructions[difficulty]
         requirements_text = "\n".join([f"- {req}" for req in diff_info["requirements"]])
         
-        prompt = f"""基于以下知识内容，生成一个{diff_info["description"]}难度的学习问题。
+        prompt = f"""基于以下知识内容，生成一个{diff_info["description"]}难度的学习问题，并提供相关的背景信息。
 
 知识内容：
 {content}
@@ -463,7 +474,13 @@ class QuestionGenerator:
 5. 问题应该能够测试对知识的真正理解
 6. 问题长度控制在10-100字之间
 
-请只返回一个问题，不要包含其他内容："""
+请按照以下JSON格式返回结果：
+{{
+    "question": "生成的问题内容",
+    "background": "问题相关的背景信息，帮助理解问题的上下文和重要性"
+}}
+
+请确保返回有效的JSON格式："""
 
         return prompt
     
@@ -505,6 +522,35 @@ class QuestionGenerator:
         question = re.sub(r'[？?]{2,}', '？', question)
         
         return question.strip()
+    
+    def _clean_json_response(self, response: str) -> str:
+        """
+        清理JSON响应
+        
+        Args:
+            response: 原始响应
+            
+        Returns:
+            str: 清理后的JSON字符串
+        """
+        # 首先使用通用的模型响应清理函数
+        response = clean_model_response(response)
+        
+        # 移除可能的前缀和后缀
+        response = response.strip()
+        
+        # 查找JSON开始和结束位置
+        start_idx = response.find('{')
+        end_idx = response.rfind('}')
+        
+        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+            response = response[start_idx:end_idx + 1]
+        
+        # 修复常见的JSON格式问题
+        response = re.sub(r',\s*}', '}', response)  # 移除尾随逗号
+        response = re.sub(r',\s*]', ']', response)  # 移除数组尾随逗号
+        
+        return response
     
     def generate_multiple_questions(
         self,
@@ -577,8 +623,8 @@ class QuestionGenerator:
                         strategy=ContentSelectionStrategy.DIVERSE
                     )
                     
-                    question = self._generate_question_content(context, QuestionDifficulty.MEDIUM)
-                    suggestions.append(question)
+                    question_data = self._generate_question_content(context, QuestionDifficulty.MEDIUM)
+                    suggestions.append(question_data["question"])
                     
                 except Exception as e:
                     logger.warning(f"Failed to generate suggestion: {str(e)}")

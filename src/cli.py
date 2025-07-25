@@ -493,6 +493,7 @@ class KnowledgeCLI:
         console.print(f"[blue]开始 '{kb_name}' 知识库问答会话[/blue]")
         console.print("输入 'quit' 或 'exit' 退出会话")
         console.print("输入 'skip' 跳过当前问题")
+        console.print("输入 'tip' 查看问题背景信息")
         console.print("输入 'clear' 清除问题历史记录\n")
 
         while True:
@@ -512,34 +513,61 @@ class KnowledgeCLI:
                         border_style="blue",
                     )
                 )
+                
+                # 如果有背景信息，提示用户可以查看
+                if question.background_info:
+                    console.print("[dim]💡 输入 'tip' 查看问题背景信息[/dim]")
 
                 # 显示问题统计信息
                 history_count = self.question_generator.get_question_history_count(kb_name)
                 console.print(f"[dim]已生成问题数: {history_count}[/dim]")
 
-                # 获取用户答案
-                user_answer = console.input(
-                    "\n[bold green]请输入您的答案 (或输入 'skip' 跳过):[/bold green] "
-                )
+                # 获取用户答案的循环
+                while True:
+                    # 获取用户答案
+                    user_answer = console.input(
+                        "\n[bold green]请输入您的答案 (或输入 'skip' 跳过):[/bold green] "
+                    )
 
-                # 检查特殊命令
-                if user_answer.lower() in ["quit", "exit", "退出"]:
-                    console.print("[yellow]会话已结束[/yellow]")
+                    # 检查特殊命令
+                    if user_answer.lower() in ["quit", "exit", "退出"]:
+                        console.print("[yellow]会话已结束[/yellow]")
+                        return  # 直接返回，结束整个会话
+                    
+                    if user_answer.lower() in ["skip", "跳过"]:
+                        console.print("[yellow]已跳过当前问题[/yellow]")
+                        console.print("\n" + "=" * 50 + "\n")
+                        break  # 跳出内层循环，生成新问题
+                    
+                    if user_answer.lower() in ["clear", "清除"]:
+                        self.question_generator.clear_question_history(kb_name)
+                        console.print("[green]已清除问题历史记录[/green]")
+                        console.print("\n" + "=" * 50 + "\n")
+                        break  # 跳出内层循环，生成新问题
+                    
+                    if user_answer.lower() in ["tip", "背景", "提示"]:
+                        if question.background_info:
+                            console.print(
+                                Panel(
+                                    question.background_info,
+                                    title="[bold cyan]问题背景[/bold cyan]",
+                                    border_style="cyan",
+                                )
+                            )
+                        else:
+                            console.print("[yellow]当前问题没有背景信息[/yellow]")
+                        console.print()
+                        continue  # 继续内层循环，重新提示输入答案
+
+                    if not user_answer.strip():
+                        console.print("[yellow]答案不能为空，请重新输入或输入 'skip' 跳过[/yellow]")
+                        continue  # 继续内层循环，重新提示输入答案
+                    
+                    # 如果到这里，说明用户输入了有效答案，跳出内层循环
                     break
                 
-                if user_answer.lower() in ["skip", "跳过"]:
-                    console.print("[yellow]已跳过当前问题[/yellow]")
-                    console.print("\n" + "=" * 50 + "\n")
-                    continue
-                
-                if user_answer.lower() in ["clear", "清除"]:
-                    self.question_generator.clear_question_history(kb_name)
-                    console.print("[green]已清除问题历史记录[/green]")
-                    console.print("\n" + "=" * 50 + "\n")
-                    continue
-
-                if not user_answer.strip():
-                    console.print("[yellow]答案不能为空，请重新输入或输入 'skip' 跳过[/yellow]")
+                # 如果用户选择了skip或clear，继续外层循环生成新问题
+                if user_answer.lower() in ["skip", "跳过", "clear", "清除"]:
                     continue
 
                 # 评估答案
@@ -832,11 +860,7 @@ class KnowledgeCLI:
         eval_content.append("")
         eval_content.append(f"[bold]反馈:[/bold]\n{record.evaluation.feedback}")
 
-        if record.evaluation.strengths:
-            eval_content.append("")
-            eval_content.append("[bold green]优点:[/bold green]")
-            for strength in record.evaluation.strengths:
-                eval_content.append(f"  • {strength}")
+
 
         if record.evaluation.missing_points:
             eval_content.append("")
@@ -1036,11 +1060,7 @@ class KnowledgeCLI:
         content.append("")
         content.append(f"[bold]反馈:[/bold]\n{evaluation.feedback}")
 
-        if evaluation.strengths:
-            content.append("")
-            content.append("[bold green]优点:[/bold green]")
-            for strength in evaluation.strengths:
-                content.append(f"  • {strength}")
+
 
         if evaluation.missing_points:
             content.append("")

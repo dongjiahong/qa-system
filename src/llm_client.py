@@ -443,10 +443,9 @@ class OllamaClient:
 {{
     "is_correct": true/false,
     "score": 0-10的分数,
-    "feedback": "详细的反馈说明",
+    "feedback": "详细的反馈说明，重点关注需要改进的地方",
     "reference_answer": "基于参考知识的标准答案",
-    "missing_points": ["缺失的要点1", "缺失的要点2"],
-    "strengths": ["答案的优点1", "答案的优点2"]
+    "missing_points": ["缺失的要点1", "缺失的要点2"]
 }}
 
 评估标准：
@@ -475,7 +474,6 @@ class OllamaClient:
                 
                 # 确保可选字段存在
                 evaluation_result.setdefault("missing_points", [])
-                evaluation_result.setdefault("strengths", [])
                 
                 logger.info("Successfully evaluated answer")
                 return evaluation_result
