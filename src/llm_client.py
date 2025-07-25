@@ -5,6 +5,7 @@ Ollama 和 Qwen3 模型集成客户端
 
 import json
 import time
+import re
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 from enum import Enum
@@ -14,6 +15,33 @@ from loguru import logger
 
 from .config import get_config
 from .models import ModelServiceError
+
+
+def clean_model_response(text: str) -> str:
+    """
+    清理模型响应文本，移除思考标签和其他不需要的内容
+    
+    Args:
+        text: 原始模型响应文本
+        
+    Returns:
+        清理后的文本
+    """
+    if not text:
+        return text
+    
+    # 移除 <think> 标签及其内容（支持多行）
+    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    
+    # 移除其他可能的思考标签变体
+    text = re.sub(r'<thinking>.*?</thinking>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'<thought>.*?</thought>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    
+    # 清理多余的空白字符
+    text = re.sub(r'\n\s*\n\s*\n', '\n\n', text)  # 多个连续空行变为两个
+    text = text.strip()
+    
+    return text
 
 
 class ModelStatus(Enum):
@@ -295,9 +323,12 @@ class OllamaClient:
             
             response_data = response.json()
             
-            # 解析响应
+            # 解析响应并清理文本
+            raw_response = response_data.get("response", "")
+            cleaned_response = clean_model_response(raw_response)
+            
             generation_response = GenerationResponse(
-                response=response_data.get("response", ""),
+                response=cleaned_response,
                 model=response_data.get("model", model),
                 created_at=response_data.get("created_at", ""),
                 done=response_data.get("done", True),
@@ -319,7 +350,7 @@ class OllamaClient:
                     details={"error": str(e), "model": model}
                 )
     
-    def generate_question(self, context: str, difficulty: str = "medium") -> str:
+    def generate_question(self, context: str, difficulty: str = "easy") -> str:
         """
         基于上下文生成问题
         
@@ -356,6 +387,7 @@ class OllamaClient:
                 temperature=self.config.question_generation_temperature
             )
             
+            # 响应已经在 generate 方法中被清理过了
             question = response.response.strip()
             if not question:
                 raise ModelServiceError("Generated question is empty")
@@ -410,7 +442,7 @@ class OllamaClient:
 请按照以下格式返回评估结果（必须是有效的JSON格式）：
 {{
     "is_correct": true/false,
-    "score": 0-100的分数,
+    "score": 0-10的分数,
     "feedback": "详细的反馈说明",
     "reference_answer": "基于参考知识的标准答案",
     "missing_points": ["缺失的要点1", "缺失的要点2"],
@@ -430,6 +462,7 @@ class OllamaClient:
                 temperature=self.config.evaluation_temperature
             )
             
+            # 响应已经在 generate 方法中被清理过了
             # 尝试解析JSON响应
             try:
                 evaluation_result = json.loads(response.response.strip())

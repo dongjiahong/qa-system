@@ -20,7 +20,7 @@ from .models import (
     KnowledgeBaseNotFoundError
 )
 from .vector_store import VectorStore, SearchResult
-from .llm_client import OllamaClient, get_ollama_client
+from .llm_client import OllamaClient, get_ollama_client, clean_model_response
 from .config import get_config
 
 
@@ -370,7 +370,7 @@ class AnswerEvaluator:
 请按照以下JSON格式返回评估结果：
 {{
     "is_correct": true/false,
-    "score": 0-100的分数,
+    "score": 0-10的分数,
     "feedback": "详细的反馈说明，包括答案的优缺点",
     "reference_answer": "基于参考知识的标准答案",
     "missing_points": ["缺失的要点1", "缺失的要点2"],
@@ -378,15 +378,15 @@ class AnswerEvaluator:
 }}
 
 评估标准：
-1. 事实准确性（40分）：答案是否符合参考知识中的事实
-2. 完整性（30分）：答案是否涵盖了问题的关键要点
-3. 相关性（20分）：答案是否直接回答了问题
-4. 清晰度（10分）：答案表达是否清晰易懂
+1. 事实准确性（4分）：答案是否符合参考知识中的事实
+2. 完整性（3分）：答案是否涵盖了问题的关键要点
+3. 相关性（2分）：答案是否直接回答了问题
+4. 清晰度（1分）：答案表达是否清晰易懂
 
 评估要求：
-- 如果答案基本正确且完整，is_correct为true，分数70分以上
-- 如果答案部分正确但有重要遗漏，is_correct为false，分数40-69分
-- 如果答案错误或严重不完整，is_correct为false，分数40分以下
+- 如果答案基本正确且完整，is_correct为true，分数7分以上
+- 如果答案部分正确但有重要遗漏，is_correct为false，分数4-7分
+- 如果答案错误或严重不完整，is_correct为false，分数4分以下
 - feedback应该具体指出答案的问题和改进建议
 - reference_answer应该基于参考知识给出完整准确的答案
 - missing_points列出答案中缺失的重要要点
@@ -428,9 +428,9 @@ class AnswerEvaluator:
                 evaluation_data["is_correct"] = str(evaluation_data["is_correct"]).lower() == "true"
             
             score = float(evaluation_data["score"])
-            if not (0 <= score <= 100):
-                logger.warning(f"Score {score} out of range, clamping to 0-100")
-                score = max(0, min(100, score))
+            if not (0 <= score <= 10):
+                logger.warning(f"Score {score} out of range, clamping to 0-10")
+                score = max(0, min(10, score))
             
             # 创建评估结果
             return EvaluationResult(
@@ -461,6 +461,9 @@ class AnswerEvaluator:
         Returns:
             str: 清理后的JSON字符串
         """
+        # 首先使用通用的模型响应清理函数
+        response = clean_model_response(response)
+        
         # 移除可能的前缀和后缀
         response = response.strip()
         
@@ -494,13 +497,13 @@ class AnswerEvaluator:
         
         # 简单的分数估算
         if "优秀" in response or "很好" in response:
-            score = 85.0
+            score = 8.5
         elif "良好" in response or "不错" in response:
-            score = 70.0
+            score = 7.0
         elif "一般" in response or "部分正确" in response:
-            score = 55.0
+            score = 5.5
         else:
-            score = 30.0
+            score = 3.0
         
         return EvaluationResult(
             is_correct=is_correct,
@@ -595,27 +598,27 @@ class AnswerEvaluator:
         
         # 分数分布
         score_ranges = {
-            "90-100": 0,
-            "80-89": 0,
-            "70-79": 0,
-            "60-69": 0,
-            "50-59": 0,
-            "0-49": 0
+            "9-10": 0,
+            "8-8.9": 0,
+            "7-7.9": 0,
+            "6-6.9": 0,
+            "5-5.9": 0,
+            "0-4.9": 0
         }
         
         for result in results:
-            if result.score >= 90:
-                score_ranges["90-100"] += 1
-            elif result.score >= 80:
-                score_ranges["80-89"] += 1
-            elif result.score >= 70:
-                score_ranges["70-79"] += 1
-            elif result.score >= 60:
-                score_ranges["60-69"] += 1
-            elif result.score >= 50:
-                score_ranges["50-59"] += 1
+            if result.score >= 9:
+                score_ranges["9-10"] += 1
+            elif result.score >= 8:
+                score_ranges["8-8.9"] += 1
+            elif result.score >= 7:
+                score_ranges["7-7.9"] += 1
+            elif result.score >= 6:
+                score_ranges["6-6.9"] += 1
+            elif result.score >= 5:
+                score_ranges["5-5.9"] += 1
             else:
-                score_ranges["0-49"] += 1
+                score_ranges["0-4.9"] += 1
         
         # 状态分布
         status_distribution = {}

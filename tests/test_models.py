@@ -392,7 +392,7 @@ class TestEvaluationResult:
     
     def test_evaluation_result_validation_score_range(self):
         """测试分数范围验证"""
-        with pytest.raises(ValidationError, match="分数必须在0-100之间"):
+        with pytest.raises(ValidationError, match="分数必须在0-10之间"):
             EvaluationResult(
                 is_correct=True,
                 score=-1,
@@ -400,10 +400,10 @@ class TestEvaluationResult:
                 reference_answer="参考答案"
             )
         
-        with pytest.raises(ValidationError, match="分数必须在0-100之间"):
+        with pytest.raises(ValidationError, match="分数必须在0-10之间"):
             EvaluationResult(
                 is_correct=True,
-                score=101,
+                score=11,
                 feedback="反馈",
                 reference_answer="参考答案"
             )

@@ -308,7 +308,7 @@ class TestQuestionGeneratorIntegration:
             result = self.generator.validate_question_quality(question)
             
             assert result["is_valid"] == expected_valid
-            assert 0 <= result["quality_score"] <= 100
+            assert 0 <= result["quality_score"] <= 10
             
             if expected_valid:
                 assert result["quality_score"] >= min_score - 20  # 允许一些误差

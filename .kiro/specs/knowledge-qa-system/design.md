@@ -239,7 +239,7 @@ class Question:
 @dataclass
 class EvaluationResult:
     is_correct: bool
-    score: float  # 0-100
+    score: float  # 0-10
     feedback: str
     missing_points: List[str]
     reference_answer: str

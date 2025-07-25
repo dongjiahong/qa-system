@@ -258,7 +258,7 @@ evaluation = evaluator.evaluate_answer(
     kb_name="api-demo"
 )
 
-print(f"评估结果: {evaluation.score}/100")
+print(f"评估结果: {evaluation.score}/10")
 print(f"反馈: {evaluation.feedback}")
 """)
         

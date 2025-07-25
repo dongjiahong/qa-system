@@ -215,7 +215,7 @@ class EvaluationResult:
     """答案评估结果数据模型"""
     
     is_correct: bool
-    score: float  # 0-100
+    score: float  # 0-10
     feedback: str
     reference_answer: str
     missing_points: List[str] = field(default_factory=list)
@@ -231,8 +231,8 @@ class EvaluationResult:
         if not isinstance(self.is_correct, bool):
             raise ValidationError("is_correct必须是布尔值")
         
-        if not (0 <= self.score <= 100):
-            raise ValidationError("分数必须在0-100之间")
+        if not (0 <= self.score <= 10):
+            raise ValidationError("分数必须在0-10之间")
         
         if not self.feedback or not self.feedback.strip():
             raise ValidationError("反馈内容不能为空")

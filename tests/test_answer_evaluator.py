@@ -411,7 +411,7 @@ class TestAnswerEvaluator:
         
         result = self.evaluator._parse_evaluation_response(response)
         
-        assert result.score == 100.0  # 应该被限制在100
+        assert result.score == 10.0  # 应该被限制在10
     
     def test_clean_json_response(self):
         """测试清理JSON响应"""
@@ -576,21 +576,21 @@ class TestAnswerEvaluator:
         results = [
             EvaluationResult(
                 is_correct=True,
-                score=95.0,
+                score=9.5,
                 feedback="优秀",
                 reference_answer="答案1",
                 status=EvaluationStatus.SUCCESS
             ),
             EvaluationResult(
                 is_correct=True,
-                score=85.0,
+                score=8.5,
                 feedback="良好",
                 reference_answer="答案2",
                 status=EvaluationStatus.SUCCESS
             ),
             EvaluationResult(
                 is_correct=False,
-                score=45.0,
+                score=4.5,
                 feedback="需要改进",
                 reference_answer="答案3",
                 status=EvaluationStatus.SUCCESS
@@ -609,10 +609,10 @@ class TestAnswerEvaluator:
         assert stats["total_count"] == 4
         assert stats["correct_count"] == 2
         assert stats["accuracy_rate"] == 50.0
-        assert stats["average_score"] == 56.25
-        assert stats["score_distribution"]["90-100"] == 1
-        assert stats["score_distribution"]["80-89"] == 1
-        assert stats["score_distribution"]["0-49"] == 2
+        assert stats["average_score"] == 5.625
+        assert stats["score_distribution"]["9-10"] == 1
+        assert stats["score_distribution"]["8-8.9"] == 1
+        assert stats["score_distribution"]["0-4.9"] == 2
         assert stats["status_distribution"]["success"] == 3
         assert stats["status_distribution"]["error"] == 1
     

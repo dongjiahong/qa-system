@@ -20,7 +20,7 @@ from .models import (
     KnowledgeBaseNotFoundError
 )
 from .vector_store import VectorStore, SearchResult
-from .llm_client import OllamaClient, get_ollama_client
+from .llm_client import OllamaClient, get_ollama_client, clean_model_response
 from .config import get_config
 
 
@@ -133,7 +133,7 @@ class QuestionGenerator:
     def generate_question(
         self, 
         kb_name: str,
-        difficulty: QuestionDifficulty = QuestionDifficulty.MEDIUM,
+        difficulty: QuestionDifficulty = QuestionDifficulty.EASY,
         strategy: ContentSelectionStrategy = ContentSelectionStrategy.RANDOM,
         max_retries: int = 3
     ) -> Question:
@@ -369,7 +369,7 @@ class QuestionGenerator:
             response = self.llm_client.generate(
                 prompt=prompt,
                 temperature=self.config.question_generation_temperature,
-                max_tokens=200  # 限制问题长度
+                max_tokens=1000  # 限制问题长度
             )
             
             question = response.response.strip()
@@ -457,6 +457,9 @@ class QuestionGenerator:
         Returns:
             str: 清理后的问题
         """
+        # 首先使用通用的模型响应清理函数
+        question = clean_model_response(question)
+        
         # 移除多余的空白字符
         question = re.sub(r'\s+', ' ', question.strip())
         
@@ -595,34 +598,34 @@ class QuestionGenerator:
             question: 问题文本
             
         Returns:
-            float: 质量分数 (0-100)
+            float: 质量分数 (0-10)
         """
-        score = 100.0
+        score = 10.0
         
         # 长度评分
         if len(question) < 5:
-            score -= 30
+            score -= 3.0
         elif len(question) > 200:
-            score -= 20
+            score -= 2.0
         
         # 问号检查
         if not ('？' in question or '?' in question):
-            score -= 40
+            score -= 4.0
         
         # 质量关键词检查
         quality_keywords = self.validator.quality_keywords
         keyword_count = sum(1 for keyword in quality_keywords if keyword in question)
         if keyword_count == 0:
-            score -= 20
+            score -= 2.0
         elif keyword_count > 2:
-            score += 10
+            score += 1.0
         
         # 禁止模式检查
         for pattern in self.validator.forbidden_patterns:
             if re.search(pattern, question):
-                score -= 25
+                score -= 2.5
         
-        return max(0.0, min(100.0, score))
+        return max(0.0, min(10.0, score))
 
 
 # 全局问题生成器实例

@@ -473,19 +473,19 @@ class TestQuestionGenerator:
     def test_calculate_quality_score(self):
         """测试质量分数计算"""
         test_cases = [
-            ("什么是机器学习的基本原理？", 80),  # Good question
+            ("什么是机器学习的基本原理？", 8.0),  # Good question
             ("？", 0),  # Too short
-            ("什么" * 100 + "？", 70),  # Too long
-            ("机器学习是什么概念", 50),  # No question mark
-            ("请问什么是机器学习的基本概念？", 60),  # Forbidden pattern
+            ("什么" * 100 + "？", 7.0),  # Too long
+            ("机器学习是什么概念", 5.0),  # No question mark
+            ("请问什么是机器学习的基本概念？", 6.0),  # Forbidden pattern
         ]
         
         for question, expected_min_score in test_cases:
             score = self.generator._calculate_quality_score(question)
-            assert 0 <= score <= 100
+            assert 0 <= score <= 10
             # Allow some tolerance in score calculation
-            if expected_min_score > 70:
-                assert score >= expected_min_score - 15
+            if expected_min_score > 7.0:
+                assert score >= expected_min_score - 1.5
     
     def test_model_service_error_handling(self):
         """测试模型服务错误处理"""

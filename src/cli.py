@@ -809,7 +809,7 @@ class KnowledgeCLI:
         eval_content.append(
             f"[bold]结果:[/bold] [{result_color}]{result_text}[/{result_color}]"
         )
-        eval_content.append(f"[bold]分数:[/bold] {record.evaluation.score:.1f}/100")
+        eval_content.append(f"[bold]分数:[/bold] {record.evaluation.score:.1f}/10")
         eval_content.append("")
         eval_content.append(f"[bold]反馈:[/bold]\n{record.evaluation.feedback}")
 
@@ -1013,7 +1013,7 @@ class KnowledgeCLI:
 
         # 构建结果内容
         content = []
-        content.append(f"[bold]分数:[/bold] {evaluation.score:.1f}/100")
+        content.append(f"[bold]分数:[/bold] {evaluation.score:.1f}/10")
         content.append("")
         content.append(f"[bold]反馈:[/bold]\n{evaluation.feedback}")
 
