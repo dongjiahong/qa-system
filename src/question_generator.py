@@ -22,6 +22,11 @@ from .models import (
 from .vector_store import VectorStore, SearchResult
 from .llm_client import OllamaClient, get_ollama_client, clean_model_response
 from .config import get_config
+from .metadata_extractors import (
+    get_metadata_extractor_manager, 
+    ExtractorType, 
+    ExtractedMetadata
+)
 
 
 class ContentSelectionStrategy(Enum):
@@ -114,7 +119,8 @@ class QuestionGenerator:
     def __init__(
         self, 
         vector_store: Optional[VectorStore] = None,
-        llm_client: Optional[OllamaClient] = None
+        llm_client: Optional[OllamaClient] = None,
+        use_metadata_extractors: bool = True
     ):
         """
         初始化问题生成器
@@ -122,16 +128,24 @@ class QuestionGenerator:
         Args:
             vector_store: 向量存储实例
             llm_client: LLM客户端实例
+            use_metadata_extractors: 是否使用元数据抽取器
         """
         self.config = get_config()
         self.vector_store = vector_store or VectorStore()
         self.llm_client = llm_client or get_ollama_client()
         self.validator = QuestionQualityValidator()
         
+        # 元数据抽取器
+        self.use_metadata_extractors = use_metadata_extractors
+        if use_metadata_extractors:
+            self.metadata_manager = get_metadata_extractor_manager()
+        else:
+            self.metadata_manager = None
+        
         # 问题历史记录，用于去重
         self.question_history: Dict[str, set] = {}  # kb_name -> set of content_hash
         
-        logger.info("QuestionGenerator initialized")
+        logger.info(f"QuestionGenerator initialized with metadata extractors: {use_metadata_extractors}")
     
     def generate_question(
         self, 
@@ -244,7 +258,7 @@ class QuestionGenerator:
         strategy: ContentSelectionStrategy
     ) -> QuestionGenerationContext:
         """
-        根据策略选择用于生成问题的内容
+        根据策略选择用于生成问题的内容，集成元数据抽取器
         
         Args:
             kb_name: 知识库名称
@@ -256,6 +270,13 @@ class QuestionGenerator:
         logger.debug(f"Selecting content using strategy: {strategy.value}")
         
         try:
+            # 首先尝试基于已抽取的问答对选择内容
+            if self.use_metadata_extractors and strategy == ContentSelectionStrategy.DIVERSE:
+                qa_based_context = self._select_content_based_on_qa_metadata(kb_name)
+                if qa_based_context:
+                    return qa_based_context
+            
+            # 回退到原有策略
             if strategy == ContentSelectionStrategy.RANDOM:
                 return self._select_random_content(kb_name)
             elif strategy == ContentSelectionStrategy.DIVERSE:
@@ -364,6 +385,65 @@ class QuestionGenerator:
             strategy=ContentSelectionStrategy.COMPREHENSIVE
         )
     
+    def _select_content_based_on_qa_metadata(self, kb_name: str) -> Optional[QuestionGenerationContext]:
+        """基于已抽取的问答元数据选择内容"""
+        try:
+            # 搜索包含问答对的文档
+            results = self.vector_store.similarity_search(kb_name, "问题 答案", k=10)
+            
+            if not results:
+                return None
+            
+            # 寻找包含问答元数据的文档
+            for result in results:
+                doc = result.document
+                
+                # 检查是否已有问答元数据
+                if 'qa_pairs' in doc.metadata:
+                    logger.debug("Found document with existing Q&A metadata")
+                    return QuestionGenerationContext(
+                        content=doc.content,
+                        source_metadata=doc.metadata,
+                        difficulty=QuestionDifficulty.MEDIUM,
+                        strategy=ContentSelectionStrategy.DIVERSE
+                    )
+                
+                # 如果没有元数据，尝试实时抽取
+                if self.metadata_manager:
+                    from llama_index.core import Document as LlamaDocument
+                    llama_doc = LlamaDocument(text=doc.content, metadata=doc.metadata)
+                    
+                    qa_metadata = self.metadata_manager.extract_specific_metadata(
+                        llama_doc, 
+                        [ExtractorType.QUESTIONS_ANSWERED]
+                    )
+                    
+                    if ExtractorType.QUESTIONS_ANSWERED in qa_metadata:
+                        qa_data = qa_metadata[ExtractorType.QUESTIONS_ANSWERED]
+                        if qa_data.confidence > 0.3 and qa_data.content.get('qa_pairs'):
+                            logger.debug(f"Extracted Q&A metadata with confidence {qa_data.confidence:.2f}")
+                            
+                            # 更新文档元数据
+                            enhanced_metadata = doc.metadata.copy()
+                            enhanced_metadata.update({
+                                'qa_pairs': qa_data.content['qa_pairs'],
+                                'qa_extraction_confidence': qa_data.confidence,
+                                'has_qa_content': True
+                            })
+                            
+                            return QuestionGenerationContext(
+                                content=doc.content,
+                                source_metadata=enhanced_metadata,
+                                difficulty=QuestionDifficulty.MEDIUM,
+                                strategy=ContentSelectionStrategy.DIVERSE
+                            )
+            
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Failed to select content based on Q&A metadata: {str(e)}")
+            return None
+    
     def _generate_question_content(
         self, 
         context: QuestionGenerationContext, 
@@ -385,7 +465,7 @@ class QuestionGenerator:
             content = content[:self.config.max_context_length] + "..."
         
         # 根据难度构建不同的提示词
-        prompt = self._create_question_prompt(content, difficulty)
+        prompt = self._create_question_prompt(content, difficulty, context)
         
         try:
             # 调用LLM生成问题
@@ -417,13 +497,14 @@ class QuestionGenerator:
             logger.error(f"Failed to generate question content: {str(e)}")
             raise ModelServiceError(f"Question generation failed: {str(e)}")
     
-    def _create_question_prompt(self, content: str, difficulty: QuestionDifficulty) -> str:
+    def _create_question_prompt(self, content: str, difficulty: QuestionDifficulty, context: Optional[QuestionGenerationContext] = None) -> str:
         """
-        创建问题生成提示词
+        创建问题生成提示词，集成元数据信息
         
         Args:
             content: 知识内容
             difficulty: 问题难度
+            context: 问题生成上下文（包含元数据）
             
         Returns:
             str: 提示词
@@ -458,10 +539,37 @@ class QuestionGenerator:
         diff_info = difficulty_instructions[difficulty]
         requirements_text = "\n".join([f"- {req}" for req in diff_info["requirements"]])
         
+        # 构建基础提示词
         prompt = f"""基于以下知识内容，生成一个{diff_info["description"]}难度的学习问题，并提供相关的背景信息。
 
 知识内容：
-{content}
+{content}"""
+
+        # 如果有元数据，添加额外的指导信息
+        if context and context.source_metadata:
+            metadata = context.source_metadata
+            
+            # 添加已有问答对信息
+            if 'qa_pairs' in metadata and metadata['qa_pairs']:
+                existing_questions = [pair.get('question', '') for pair in metadata['qa_pairs'][:3]]
+                if existing_questions:
+                    questions_text = "\n".join([f"- {q}" for q in existing_questions if q])
+                    prompt += f"""
+
+已知该内容包含以下问答信息，请生成不同角度的新问题：
+{questions_text}"""
+
+            # 添加关键概念信息
+            if 'key_concepts' in metadata and metadata['key_concepts']:
+                concepts = metadata['key_concepts'][:5]
+                concepts_text = ", ".join([c.get('name', '') for c in concepts if c.get('name')])
+                if concepts_text:
+                    prompt += f"""
+
+关键概念：{concepts_text}
+请围绕这些概念设计问题。"""
+
+        prompt += f"""
 
 问题要求：
 {requirements_text}
@@ -473,6 +581,7 @@ class QuestionGenerator:
 4. 避免是非题和选择题格式
 5. 问题应该能够测试对知识的真正理解
 6. 问题长度控制在10-100字之间
+7. 避免与已有问题重复，要有新的角度和深度
 
 请按照以下JSON格式返回结果：
 {{
