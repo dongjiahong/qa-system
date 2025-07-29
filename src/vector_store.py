@@ -245,7 +245,7 @@ class VectorStore:
             # 准备数据
             ids = [doc.id for doc in documents]
             texts = [doc.content for doc in documents]
-            metadatas = [doc.metadata for doc in documents]
+            metadatas = [self._sanitize_metadata(doc.metadata) for doc in documents]
             
             # 批量添加文档
             collection.add(
@@ -303,10 +303,14 @@ class VectorStore:
             
             if results['ids'] and results['ids'][0]:
                 for i, doc_id in enumerate(results['ids'][0]):
+                    # 反序列化元数据
+                    raw_metadata = results['metadatas'][0][i] or {}
+                    deserialized_metadata = self._deserialize_metadata(raw_metadata)
+                    
                     document = DocumentChunk(
                         id=doc_id,
                         content=results['documents'][0][i],
-                        metadata=results['metadatas'][0][i] or {}
+                        metadata=deserialized_metadata
                     )
                     
                     # ChromaDB 返回的是距离，需要转换为相似度分数
@@ -372,7 +376,7 @@ class VectorStore:
             collection.update(
                 ids=[document.id],
                 documents=[document.content],
-                metadatas=[document.metadata]
+                metadatas=[self._sanitize_metadata(document.metadata)]
             )
             
             logger.info(f"Updated document '{document.id}' in collection '{kb_name}'")
@@ -434,6 +438,102 @@ class VectorStore:
             error_msg = f"Failed to get collection '{kb_name}': {str(e)}"
             logger.error(error_msg)
             raise VectorStoreError(error_msg, {"kb_name": kb_name})
+    
+    def _sanitize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        清理元数据，确保只包含ChromaDB支持的数据类型
+        
+        Args:
+            metadata: 原始元数据
+            
+        Returns:
+            Dict[str, Any]: 清理后的元数据
+        """
+        import json
+        
+        sanitized = {}
+        
+        for key, value in metadata.items():
+            try:
+                # ChromaDB支持的类型：str, int, float, bool
+                # 注意：ChromaDB实际上不支持None值，需要转换
+                if value is None:
+                    sanitized[key] = "null"  # 将None转换为字符串
+                    sanitized[f"{key}_type"] = "NoneType"
+                elif isinstance(value, (str, int, float, bool)):
+                    sanitized[key] = value
+                elif isinstance(value, (list, dict)):
+                    # 将复杂数据结构序列化为JSON字符串
+                    sanitized[key] = json.dumps(value, ensure_ascii=False)
+                    # 添加类型标记，便于后续反序列化
+                    sanitized[f"{key}_type"] = type(value).__name__
+                else:
+                    # 其他类型转换为字符串
+                    sanitized[key] = str(value)
+                    sanitized[f"{key}_type"] = type(value).__name__
+            except Exception as e:
+                logger.warning(f"Failed to sanitize metadata key '{key}': {str(e)}")
+                # 如果序列化失败，将值转换为字符串
+                sanitized[key] = str(value)
+                sanitized[f"{key}_error"] = str(e)
+        
+        return sanitized
+    
+    def _deserialize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        反序列化元数据，恢复原始数据结构
+        
+        Args:
+            metadata: 序列化的元数据
+            
+        Returns:
+            Dict[str, Any]: 反序列化后的元数据
+        """
+        import json
+        
+        if not metadata:
+            return {}
+        
+        deserialized = {}
+        processed_keys = set()
+        
+        for key, value in metadata.items():
+            # 跳过已处理的键和类型标记键
+            if key in processed_keys or key.endswith('_type') or key.endswith('_error'):
+                continue
+            
+            type_key = f"{key}_type"
+            error_key = f"{key}_error"
+            
+            # 如果有错误标记，直接使用字符串值
+            if error_key in metadata:
+                deserialized[key] = value
+                processed_keys.add(key)
+                processed_keys.add(error_key)
+                continue
+            
+            # 如果有类型标记，尝试反序列化
+            if type_key in metadata:
+                original_type = metadata[type_key]
+                try:
+                    if original_type == 'NoneType' and value == "null":
+                        deserialized[key] = None
+                    elif original_type in ['list', 'dict'] and isinstance(value, str):
+                        deserialized[key] = json.loads(value)
+                    else:
+                        deserialized[key] = value
+                except json.JSONDecodeError:
+                    logger.warning(f"Failed to deserialize metadata key '{key}', using string value")
+                    deserialized[key] = value
+                
+                processed_keys.add(key)
+                processed_keys.add(type_key)
+            else:
+                # 没有类型标记，直接使用原值
+                deserialized[key] = value
+                processed_keys.add(key)
+        
+        return deserialized
     
     def _validate_collection_name(self, name: str) -> None:
         """
