@@ -33,9 +33,10 @@ from .models import (
     ValidationError,
     KnowledgeBaseNotFoundError,
     VectorStoreError,
+    QuestionDifficulty,
 )
 from .knowledge_base_manager import KnowledgeBaseManager
-from .question_generator import QuestionGenerator
+from .question_generator import QuestionGenerator, ContentSelectionStrategy
 from .answer_evaluator import AnswerEvaluator
 from .history_manager import HistoryManager
 from .config import get_config, validate_system_requirements, save_config_file
@@ -459,6 +460,21 @@ class KnowledgeCLI:
         self.history_manager = HistoryManager()
         self.config = get_config()
 
+    def _get_default_question_params(self) -> tuple[QuestionDifficulty, ContentSelectionStrategy]:
+        """从配置获取默认的问题生成参数"""
+        try:
+            difficulty = QuestionDifficulty(self.config.default_question_difficulty)
+        except ValueError:
+            console.print(f"[yellow]警告: 配置中的难度值 '{self.config.default_question_difficulty}' 无效，使用默认值 'medium'[/yellow]")
+            difficulty = QuestionDifficulty.EASY
+        try:
+            strategy = ContentSelectionStrategy(self.config.default_content_selection_strategy)
+        except ValueError:
+            console.print(f"[yellow]警告: 配置中的策略值 '{self.config.default_content_selection_strategy}' 无效，使用默认值 'diverse'[/yellow]")
+            strategy = ContentSelectionStrategy.DIVERSE
+        
+        return difficulty, strategy
+
     def create_knowledge_base(
         self, name: str, files: List[str], description: Optional[str] = None
     ):
@@ -490,7 +506,11 @@ class KnowledgeCLI:
         if not kb:
             raise KnowledgeBaseNotFoundError(f"知识库 '{kb_name}' 不存在")
 
+        # 获取配置的默认参数
+        default_difficulty, default_strategy = self._get_default_question_params()
+
         console.print(f"[blue]开始 '{kb_name}' 知识库问答会话[/blue]")
+        console.print(f"[dim]使用配置: 难度={default_difficulty.value}, 策略={default_strategy.value}[/dim]")
         console.print("输入 'quit' 或 'exit' 退出会话")
         console.print("输入 'skip' 跳过当前问题")
         console.print("输入 'tip' 查看问题背景信息")
@@ -498,11 +518,13 @@ class KnowledgeCLI:
 
         while True:
             try:
-                # 生成问题（使用支持去重的方法）
+                # 生成问题（使用配置的默认参数）
                 question = show_progress(
                     "生成问题中...", 
                     self.question_generator.generate_question_with_skip_support, 
-                    kb_name
+                    kb_name,
+                    default_difficulty,
+                    default_strategy
                 )
 
                 # 显示问题

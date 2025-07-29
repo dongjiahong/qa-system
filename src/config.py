@@ -59,6 +59,8 @@ class Settings(BaseSettings):
     max_context_length: int = Field(default=4000, ge=1000, le=8000)
     question_generation_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     question_max_retries: int = Field(default=3, ge=1, le=10)
+    default_question_difficulty: str = Field(default="easy", pattern="^(easy|medium|hard)$")
+    default_content_selection_strategy: str = Field(default="diverse", pattern="^(random|diverse|recent|comprehensive)$")
     
     # Answer evaluation settings
     evaluation_temperature: float = Field(default=0.3, ge=0.0, le=2.0)

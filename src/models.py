@@ -106,8 +106,8 @@ class KnowledgeBase:
         if self.document_count < 0:
             raise ValidationError("文档数量不能为负数")
         
-        if self.description and len(self.description) > 500:
-            raise ValidationError("描述不能超过500个字符")
+        if self.description and len(self.description) > 1000:
+            raise ValidationError("描述不能超过1000个字符")
     
     def to_dict(self) -> Dict[str, Any]:
         """序列化为字典"""

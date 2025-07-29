@@ -151,7 +151,7 @@ class QuestionGenerator:
         self, 
         kb_name: str,
         difficulty: QuestionDifficulty = QuestionDifficulty.EASY,
-        strategy: ContentSelectionStrategy = ContentSelectionStrategy.RANDOM,
+        strategy: ContentSelectionStrategy = ContentSelectionStrategy.DIVERSE,
         max_retries: int = 3,
         allow_duplicates: bool = False
     ) -> Question:
@@ -665,7 +665,7 @@ class QuestionGenerator:
         self,
         kb_name: str,
         count: int = 5,
-        difficulty: QuestionDifficulty = QuestionDifficulty.MEDIUM,
+        difficulty: QuestionDifficulty = QuestionDifficulty.EASY,
         strategy: ContentSelectionStrategy = ContentSelectionStrategy.DIVERSE
     ) -> List[Question]:
         """
@@ -680,7 +680,7 @@ class QuestionGenerator:
         Returns:
             List[Question]: 问题列表
         """
-        logger.info(f"Generating {count} questions for kb '{kb_name}'")
+        logger.info(f"Generating {count} questions for kb '{kb_name}' with difficulty '{difficulty.value}' and strategy '{strategy.value}'")
         
         questions = []
         failed_count = 0
@@ -846,7 +846,7 @@ class QuestionGenerator:
         self,
         kb_name: str,
         difficulty: QuestionDifficulty = QuestionDifficulty.EASY,
-        strategy: ContentSelectionStrategy = ContentSelectionStrategy.RANDOM,
+        strategy: ContentSelectionStrategy = ContentSelectionStrategy.DIVERSE,
         max_attempts: int = 5
     ) -> Question:
         """
